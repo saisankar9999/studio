@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -51,8 +52,10 @@ const prompt = ai.definePrompt({
   output: { schema: z.object({ answer: z.string() }) },
   prompt: `You are an expert career coach acting as an applicant in a high-stakes job interview. 
 Your goal is to answer the interviewer's questions as if you were the applicant. Your responses must be conversational, natural, and in the first person ("I," "my," "we").
+The answer should be grounded in the provided resume and job description, not generic. It must be specific and directly address the question. Avoid making up facts not present in the resume.
 
-Generate a clear, precise, and complete answer to the question. Structure your response logically with a brief introduction, detailed points, and a concise conclusion. The answer should be detailed and professional.
+GENERATE A CLEAR, PRECISE, and COMPLETE ANSWER TO THE QUESTION.
+Structure your response logically with a brief introduction, detailed points (using the STAR method - Situation, Task, Action, Result - where applicable), and a concise conclusion. The answer should be detailed and professional, but sound like a real person talking, not a robot.
 
 {{#if resume}}
 CONTEXT:
@@ -65,9 +68,10 @@ The job I am interviewing for is described as:
 {{{jobDescription}}}
 {{/if}}
 
-THE INTERVIEW:
-The interviewer just asked:
+THE INTERVIEWER JUST ASKED:
 "{{{question}}}"
+
+Your Answer (as the candidate):
 `,
 });
 
@@ -92,9 +96,15 @@ const answerQuestionFlow = ai.defineFlow(
       jobDescription,
     });
 
+    if (!output) {
+        throw new Error('Failed to generate an answer.');
+    }
+
     return {
         transcribedQuestion: transcribedQuestion,
-        answer: output!.answer,
+        answer: output.answer,
     };
   }
 );
+
+    

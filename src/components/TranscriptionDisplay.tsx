@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -135,3 +136,5 @@ export default function TranscriptionDisplay({ onAudioSubmit, transcript, isPend
     </Card>
   );
 }
+
+    
