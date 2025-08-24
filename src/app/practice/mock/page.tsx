@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -9,11 +9,12 @@ import {
   EyeOff,
   CheckCircle,
   BrainCircuit,
+  Mic,
+  StopCircle,
+  AudioLines,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Progress } from '@/components/ui/progress';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
@@ -21,8 +22,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { GenerateInterviewQuestionsOutput } from '@/ai/flows/generate-interview-questions';
 import type { AnalyzeInterviewPerformanceOutput } from '@/ai/flows/analyze-interview-performance';
-import { analyzeAnswerAction } from './actions';
+import { transcribeAndAnalyzeAnswerAction } from './actions';
 import Link from 'next/link';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface InterviewData {
   questions: GenerateInterviewQuestionsOutput;
@@ -30,7 +32,10 @@ interface InterviewData {
   jobDescription: string;
 }
 
-type PerformanceResult = AnalyzeInterviewPerformanceOutput & { question: string };
+type PerformanceResult = AnalyzeInterviewPerformanceOutput & {
+  question: string;
+  answer: string;
+};
 
 export default function MockInterviewPage() {
   const router = useRouter();
@@ -48,6 +53,12 @@ export default function MockInterviewPage() {
     useState<AnalyzeInterviewPerformanceOutput | null>(null);
   const [finished, setFinished] = useState(false);
 
+  // Audio recording state
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+
   useEffect(() => {
     try {
       const data = localStorage.getItem('interviewData');
@@ -64,43 +75,98 @@ export default function MockInterviewPage() {
       });
       router.replace('/practice');
     }
+
+    // Request microphone permissions on load
+    async function getPermissions() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setMediaStream(stream);
+      } catch (error) {
+        toast({
+          title: 'Microphone Access Denied',
+          description: 'Please enable microphone permissions to record your answers.',
+          variant: 'destructive',
+        });
+      }
+    }
+    getPermissions();
+
+    return () => {
+      mediaStream?.getTracks().forEach((track) => track.stop());
+    };
   }, [router, toast]);
 
-  const handleSubmitAnswer = () => {
-    if (!userAnswer.trim()) {
+  const startRecording = () => {
+    if (mediaStream) {
+      setIsRecording(true);
+      setCurrentFeedback(null);
+      setUserAnswer('');
+      setShowSuggestedAnswer(false);
+
+      mediaRecorderRef.current = new MediaRecorder(mediaStream);
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        audioChunksRef.current.push(event.data);
+      };
+      mediaRecorderRef.current.start();
+      toast({ title: 'Recording started...' });
+    } else {
       toast({
-        title: 'Empty Answer',
-        description: 'Please provide an answer before submitting.',
+        title: 'Microphone Not Ready',
+        description: 'Please grant microphone access to record.',
         variant: 'destructive',
       });
-      return;
     }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        audioChunksRef.current = [];
+        handleSubmitAnswer(audioBlob);
+      };
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      toast({ title: 'Recording stopped. Analyzing...' });
+    }
+  };
+
+  const handleSubmitAnswer = (audioBlob: Blob) => {
     if (!interviewData) return;
 
     startTransition(async () => {
       setCurrentFeedback(null);
-      const result = await analyzeAnswerAction({
-        question: interviewData.questions[currentQuestionIndex].question,
-        answer: userAnswer,
-        resume: interviewData.resume,
-        jobDescription: interviewData.jobDescription,
-      });
-
-      if (result.error) {
-        toast({
-          title: 'Analysis Error',
-          description: result.error,
-          variant: 'destructive',
+      
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = async () => {
+        const base64Audio = reader.result as string;
+        
+        const result = await transcribeAndAnalyzeAnswerAction({
+          question: interviewData.questions[currentQuestionIndex].question,
+          audioDataUri: base64Audio,
+          resume: interviewData.resume,
+          jobDescription: interviewData.jobDescription,
         });
-      } else if (result.feedback) {
-        setCurrentFeedback(result.feedback);
-        setPerformance([
-          ...performance,
-          {
-            ...result.feedback,
-            question: interviewData.questions[currentQuestionIndex].question,
-          },
-        ]);
+
+        if (result.error) {
+          toast({
+            title: 'Analysis Error',
+            description: result.error,
+            variant: 'destructive',
+          });
+        } else if (result.feedback && result.transcribedText) {
+          setCurrentFeedback(result.feedback);
+          setUserAnswer(result.transcribedText);
+          setPerformance([
+            ...performance,
+            {
+              ...result.feedback,
+              question: interviewData.questions[currentQuestionIndex].question,
+              answer: result.transcribedText,
+            },
+          ]);
+        }
       }
     });
   };
@@ -179,8 +245,12 @@ export default function MockInterviewPage() {
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">{p.feedback}</p>
+              <CardContent className="space-y-2">
+                 <p className="text-sm italic text-muted-foreground">
+                  Your answer: "{p.answer}"
+                </p>
+                <Separator />
+                <p className="text-sm">{p.feedback}</p>
               </CardContent>
             </Card>
           ))}
@@ -207,20 +277,35 @@ export default function MockInterviewPage() {
       </p>
 
       <div className="space-y-6">
-        <div>
-          <Label htmlFor="user-answer" className="text-lg">
-            Your Answer
-          </Label>
-          <Textarea
-            id="user-answer"
-            placeholder="Type your answer here... In a real interview, you'd be speaking, but for this practice, let's write it down."
-            className="mt-2 min-h-[150px]"
-            value={userAnswer}
-            onChange={(e) => setUserAnswer(e.target.value)}
-            disabled={!!currentFeedback}
-          />
-        </div>
-
+        <Card className="flex flex-col items-center justify-center p-6 text-center min-h-[200px]">
+          {isRecording ? (
+            <div className="flex flex-col items-center gap-4">
+              <AudioLines className="h-16 w-16 text-primary animate-pulse" />
+              <p className="text-muted-foreground">Recording your answer...</p>
+              <Button onClick={stopRecording} variant="destructive">
+                <StopCircle className="mr-2" /> Stop Recording
+              </Button>
+            </div>
+          ) : userAnswer ? (
+             <div className="text-left w-full space-y-4">
+               <h3 className="font-semibold">Your transcribed answer:</h3>
+               <p className="italic text-muted-foreground">"{userAnswer}"</p>
+               <p className="text-sm">Now, submit for feedback or re-record.</p>
+                <Button onClick={startRecording} variant="outline" disabled={isPending || !!currentFeedback}>
+                  <Mic className="mr-2" /> Record Again
+                </Button>
+             </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              <Mic className="h-16 w-16 text-muted-foreground" />
+              <p className="text-muted-foreground">Click below to start recording your answer.</p>
+              <Button onClick={startRecording} disabled={isPending || !!currentFeedback}>
+                <Mic className="mr-2" /> Start Recording
+              </Button>
+            </div>
+          )}
+        </Card>
+        
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
@@ -233,14 +318,8 @@ export default function MockInterviewPage() {
             )}
             {showSuggestedAnswer ? 'Hide' : 'Show'} Suggested Answer
           </Button>
-          {!currentFeedback && (
-            <Button onClick={handleSubmitAnswer} disabled={isPending}>
-              {isPending && <LoadingSpinner className="mr-2" />}
-              Submit Answer
-            </Button>
-          )}
         </div>
-
+        
         {showSuggestedAnswer && (
           <Card className="bg-muted/50">
             <CardContent className="p-4">
@@ -256,7 +335,7 @@ export default function MockInterviewPage() {
           <div className="flex flex-col items-center justify-center space-y-2 py-8">
             <BrainCircuit className="h-10 w-10 animate-pulse text-primary" />
             <p className="text-muted-foreground">
-              Analyzing your performance...
+              Transcribing and analyzing your performance...
             </p>
           </div>
         )}
