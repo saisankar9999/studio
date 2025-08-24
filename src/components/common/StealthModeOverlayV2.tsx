@@ -15,10 +15,11 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { GripVertical, X, Mic, StopCircle, Scan, BrainCircuit } from 'lucide-react';
+import { GripVertical, X, Scan, BrainCircuit, Mic, StopCircle, Keyboard } from 'lucide-react';
 import { LoadingSpinner } from './LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '../ui/separator';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 
 interface StealthModeOverlayProps {
   isOpen: boolean;
@@ -74,7 +75,7 @@ export function StealthModeOverlayV2({
     setIsDragging(false);
   }, []);
 
-  const getMicPermission = async () => {
+  const getMicPermission = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       setMicStream(stream);
@@ -88,9 +89,10 @@ export function StealthModeOverlayV2({
       });
       return null;
     }
-  };
+  }, [toast]);
 
-  const startRecording = async () => {
+  const startRecording = useCallback(async () => {
+    if (isRecording) return;
     let stream = micStream;
     if (!stream) {
       stream = await getMicPermission();
@@ -102,12 +104,12 @@ export function StealthModeOverlayV2({
         audioChunksRef.current.push(event.data);
       };
       mediaRecorderRef.current.start();
-      toast({ title: 'Recording question...' });
+      toast({ title: 'Recording question...', description: 'Press "S" to stop.' });
     }
-  };
+  }, [isRecording, micStream, getMicPermission, toast]);
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current) {
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.onstop = () => {
         const audioBlob = new Blob(audioChunksRef.current, {
           type: 'audio/webm',
@@ -119,17 +121,27 @@ export function StealthModeOverlayV2({
       setIsRecording(false);
       toast({ title: 'Recording stopped. Processing...' });
     }
-  };
+  }, [isRecording, onAnswerQuestion, toast]);
+  
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === 'r') {
+          startRecording();
+      }
+      if (event.key.toLowerCase() === 's') {
+          stopRecording();
+      }
+  }, [startRecording, stopRecording]);
 
   useEffect(() => {
-    getMicPermission(); // Request permission on component mount
+    getMicPermission();
+    
+    window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      // Clean up mic stream when component unmounts
       micStream?.getTracks().forEach((track) => track.stop());
+      window.removeEventListener('keydown', handleKeyDown);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [getMicPermission, handleKeyDown, micStream]);
 
 
   useEffect(() => {
@@ -170,7 +182,8 @@ export function StealthModeOverlayV2({
             <GripVertical className="h-5 w-5 text-muted-foreground" />
             <CardTitle className="flex items-center gap-2 text-base font-semibold">
                <BrainCircuit className="h-5 w-5 text-primary" />
-               {title}
+               {isRecording && <div className="flex items-center gap-1.5 text-red-500"><StopCircle className="animate-pulse h-4 w-4" /> <span>Recording...</span></div>}
+               {!isRecording && title}
             </CardTitle>
           </div>
           <Button
@@ -190,28 +203,24 @@ export function StealthModeOverlayV2({
           ) : children ? (
             children
           ) : (
-            <div className="flex items-center justify-center h-24 text-center text-muted-foreground">
-              <p>Ready for your command.</p>
+            <div className="flex flex-col items-center justify-center h-32 text-center text-muted-foreground">
+              <Alert>
+                <Keyboard className="h-4 w-4" />
+                <AlertTitle>Keyboard Controls</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-5">
+                    <li><kbd className="font-mono p-1 bg-muted rounded-sm">R</kbd> - Start Recording Question</li>
+                    <li><kbd className="font-mono p-1 bg-muted rounded-sm">S</kbd> - Stop and Process</li>
+                    <li><kbd className="font-mono p-1 bg-muted rounded-sm">Esc</kbd> - Show/Hide This Window</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
             </div>
           )}
         </CardContent>
         <Separator />
-        <CardFooter className="p-2 grid grid-cols-2 gap-2">
-           {!isRecording ? (
-            <Button onClick={startRecording} disabled={isLoading} size="sm">
-              <Mic className="mr-2" /> Record Question
-            </Button>
-          ) : (
-            <Button
-              onClick={stopRecording}
-              disabled={isLoading}
-              variant="destructive"
-              size="sm"
-            >
-              <StopCircle className="mr-2" /> Stop Recording
-            </Button>
-          )}
-          <Button onClick={onAnalyzeScreen} disabled={isLoading} size="sm">
+        <CardFooter className="p-2">
+          <Button onClick={onAnalyzeScreen} disabled={isLoading} size="sm" className="w-full">
             <Scan className="mr-2" /> Analyze Screen
           </Button>
         </CardFooter>

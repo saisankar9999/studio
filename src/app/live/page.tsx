@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useRef, useEffect } from 'react';
+import { useState, useTransition, useRef, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -49,6 +49,7 @@ export default function LivePage() {
     AnswerQuestionOutput | AnalyzeScreenOutput | null
   >(null);
   const [stealthTitle, setStealthTitle] = useState<string>('Co-pilot');
+  const [overlayVisible, setOverlayVisible] = useState(false);
 
   const handleAnalyzeCode = () => {
     if (!code.trim()) {
@@ -83,16 +84,16 @@ export default function LivePage() {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: false, // Audio capture via getDisplayMedia is less reliable for this use case
+        audio: false,
       });
       screenStreamRef.current = stream;
       setStealthMode(true);
+      setOverlayVisible(false); // Overlay is hidden by default
       toast({
         title: 'Stealth Mode Activated',
-        description: 'The overlay is now active. Share your screen in the interview.',
+        description: 'Press "R" to record question, "S" to stop. "Esc" to toggle overlay.',
       });
 
-      // Listen for when the user stops sharing
       stream.getVideoTracks()[0].onended = () => {
         setStealthMode(false);
         screenStreamRef.current = null;
@@ -110,17 +111,19 @@ export default function LivePage() {
       });
     }
   };
-  
+
   const handleStopStealthMode = () => {
-      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
-      setStealthMode(false);
-  }
+    screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+    screenStreamRef.current = null;
+    setStealthMode(false);
+    setOverlayVisible(false);
+  };
 
   const onAnswerQuestion = (audioBlob: Blob) => {
     startTransition(async () => {
       setStealthContent(null);
       setStealthTitle('Answering Question...');
+      setOverlayVisible(true); // Show overlay when processing
 
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
@@ -173,12 +176,13 @@ export default function LivePage() {
       const context = canvas.getContext('2d');
       context?.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height);
       const screenshotDataUri = canvas.toDataURL('image/png');
-      
+
       toast({ title: 'Screen captured! Analyzing...' });
 
       startTransition(async () => {
         setStealthContent(null);
         setStealthTitle('Analyzing Screen...');
+        setOverlayVisible(true);
         const result = await analyzeScreenAction({ screenshotDataUri });
         if (result.error) {
           toast({
@@ -201,18 +205,35 @@ export default function LivePage() {
       });
     }
   };
-  
+
   useEffect(() => {
-      return () => {
-          screenStreamRef.current?.getTracks().forEach(track => track.stop());
+    return () => {
+      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOverlayVisible(v => !v);
       }
-  }, [])
+  }, []);
+
+  useEffect(() => {
+      if (stealthMode) {
+          window.addEventListener('keydown', handleKeyDown);
+      } else {
+          window.removeEventListener('keydown', handleKeyDown);
+      }
+      return () => {
+          window.removeEventListener('keydown', handleKeyDown);
+      }
+  }, [stealthMode, handleKeyDown]);
 
   return (
     <div className="container mx-auto max-w-6xl p-4 py-8">
       {stealthMode && (
         <StealthModeOverlayV2
-          isOpen={stealthMode}
+          isOpen={overlayVisible}
           onClose={handleStopStealthMode}
           title={stealthTitle}
           isLoading={isPending}
@@ -237,9 +258,7 @@ export default function LivePage() {
           {stealthContent && 'analysis' in stealthContent && (
             <div className="space-y-4">
               <h4 className="font-semibold">Analysis:</h4>
-              <p className="text-muted-foreground">
-                {stealthContent.analysis}
-              </p>
+              <p className="text-muted-foreground">{stealthContent.analysis}</p>
               <h4 className="font-semibold">Suggestion:</h4>
               <div
                 className="prose prose-sm dark:prose-invert"
@@ -282,10 +301,10 @@ export default function LivePage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>How to Use Stealth Mode</AlertTitle>
                 <AlertDescription>
-                  Click "Launch Stealth Mode" below. When prompted by your
-                  browser, choose to share your **Entire Screen**. This is
-                  crucial. The overlay will appear on your screen but will be
-                  **invisible** to others in your video call.
+                  Click "Launch Stealth Mode" and share your **Entire Screen**.
+                  The overlay will be invisible to others. Use keyboard shortcuts
+                  for control: `R` to start recording, `S` to stop, and `Esc` to
+                  toggle the overlay's visibility.
                 </AlertDescription>
               </Alert>
 
@@ -301,8 +320,8 @@ export default function LivePage() {
                 <Alert variant="default">
                   <AlertTitle>Stealth Mode is Active</AlertTitle>
                   <AlertDescription>
-                    The overlay is now active. Use the controls within it. You can
-                    close this message.
+                    Use the keyboard shortcuts to operate. You can close the
+                    overlay with the 'X' button or by stopping the screen share.
                   </AlertDescription>
                 </Alert>
               )}
