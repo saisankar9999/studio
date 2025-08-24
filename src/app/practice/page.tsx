@@ -76,7 +76,7 @@ export default function PracticePage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.type.startsWith('application/pdf') || file.type.startsWith('text/plain')) {
+      if (file.type.startsWith('text/plain')) {
         const reader = new FileReader();
         reader.onload = (e) => {
           const text = e.target?.result as string;
@@ -87,7 +87,7 @@ export default function PracticePage() {
       } else {
         toast({
             title: 'Unsupported File Type',
-            description: 'Please upload a .txt or .pdf file.',
+            description: 'Please upload a .txt file.',
             variant: 'destructive'
         })
       }
@@ -190,7 +190,7 @@ export default function PracticePage() {
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 className="hidden"
-                accept=".txt,.pdf"
+                accept=".txt"
               />
                <Textarea
                 id="resume-content"
@@ -205,7 +205,7 @@ export default function PracticePage() {
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                {resumeFileName || 'Or upload a .txt or .pdf file'}
+                {resumeFileName || 'Or upload a .txt file'}
               </Button>
             </div>
             <div className="space-y-2">
