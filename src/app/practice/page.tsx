@@ -23,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import type { GenerateInterviewQuestionsOutput } from '@/ai/flows/generate-interview-questions';
 import { generateQuestionsAction } from './actions';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function PracticePage() {
   const { toast } = useToast();
