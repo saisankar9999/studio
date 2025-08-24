@@ -18,19 +18,17 @@ const AnswerQuestionInputSchema = z.object({
     .describe(
       "A recorded audio of the interviewer's question, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
-  resume: z.string().describe("The candidate's resume text content."),
-  jobDescription: z.string().describe('The job description for the role.'),
+  resume: z.string().optional().describe("The candidate's resume text content."),
+  jobDescription: z.string().optional().describe('The job description for the role.'),
 });
 export type AnswerQuestionInput = z.infer<typeof AnswerQuestionInputSchema>;
 
 const AnswerQuestionOutputSchema = z.object({
-  summarizedQuestion: z
-    .string()
-    .describe('A summarized version of the transcribed question.'),
+  transcribedQuestion: z.string().describe('The transcribed question from the audio.'),
   answer: z
     .string()
     .describe(
-      'A tailored answer to the question based on the resume and job description. Use markdown for formatting, like bullet points.'
+      'A tailored answer to the question based on the resume and job description.'
     ),
 });
 export type AnswerQuestionOutput = z.infer<typeof AnswerQuestionOutputSchema>;
@@ -46,25 +44,26 @@ const prompt = ai.definePrompt({
   input: {
     schema: z.object({
       question: z.string(),
-      resume: z.string(),
-      jobDescription: z.string(),
+      resume: z.string().optional(),
+      jobDescription: z.string().optional(),
     }),
   },
-  output: { schema: AnswerQuestionOutputSchema },
-  prompt: `You are an expert career coach acting as an applicant in a high-stakes job interview. Your goal is to answer the interviewer's questions as if you were the applicant. Your responses must be conversational, natural, and in the first person ("I," "my," "we").
+  output: { schema: z.object({ answer: z.string() }) },
+  prompt: `You are an expert career coach acting as an applicant in a high-stakes job interview. 
+Your goal is to answer the interviewer's questions as if you were the applicant. Your responses must be conversational, natural, and in the first person ("I," "my," "we").
 
-First, summarize the provided interview question.
+Generate a clear, precise, and complete answer to the question. Structure your response logically with a brief introduction, detailed points, and a concise conclusion. The answer should be detailed and professional.
 
-Then, generate a clear, precise, and complete answer to the question. Structure your response logically with a brief introduction, detailed points supported by specific examples from the resume, and a concise conclusion. The answer should be detailed and professional.
-
-When you answer, reference past experience from the resume. Align your answers with the skills and responsibilities mentioned in the job description.
-
+{{#if resume}}
 CONTEXT:
 Here is my resume:
 {{{resume}}}
+{{/if}}
 
+{{#if jobDescription}}
 The job I am interviewing for is described as:
 {{{jobDescription}}}
+{{/if}}
 
 THE INTERVIEW:
 The interviewer just asked:
@@ -83,7 +82,7 @@ const answerQuestionFlow = ai.defineFlow(
     const {text: transcribedQuestion} = await transcribeAudio({ audioDataUri });
 
     if (!transcribedQuestion) {
-      throw new Error('Failed to transcribe audio.');
+      throw new Error('Failed to transcribe audio or audio was empty.');
     }
 
     // 2. Generate the answer based on the transcribed text
@@ -93,6 +92,9 @@ const answerQuestionFlow = ai.defineFlow(
       jobDescription,
     });
 
-    return output!;
+    return {
+        transcribedQuestion: transcribedQuestion,
+        answer: output!.answer,
+    };
   }
 );
