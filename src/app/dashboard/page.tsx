@@ -1,18 +1,16 @@
 
 'use client';
 
-import { useState, useEffect, useRef, useTransition } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle, Upload } from 'lucide-react';
+import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { extractTextFromFileAction } from './actions';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
 interface Profile {
   id: string;
@@ -28,11 +26,7 @@ export default function DashboardPage() {
   
   const [newProfileName, setNewProfileName] = useState('');
   const [newResume, setNewResume] = useState('');
-  const [newResumeFileName, setNewResumeFileName] = useState('');
   const [newJd, setNewJd] = useState('');
-  
-  const [isPending, startTransition] = useTransition();
-  const resumeInputRef = useRef<HTMLInputElement>(null);
   
   // Load profiles from local storage on mount
   useEffect(() => {
@@ -69,43 +63,6 @@ export default function DashboardPage() {
     }
   }, [profiles, selectedProfileId]);
   
-  const handleResumeFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setNewResumeFileName(file.name);
-      startTransition(async () => {
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-
-          const result = await extractTextFromFileAction(formData);
-          
-          if (result.error) {
-            toast({
-              title: "Error Parsing File",
-              description: result.error,
-              variant: "destructive",
-            });
-            setNewResumeFileName('');
-          } else {
-            setNewResume(result.text ?? '');
-            toast({
-              title: "Resume Uploaded",
-              description: `${file.name} was successfully parsed.`,
-            });
-          }
-        } catch (error) {
-          toast({
-            title: "Error Reading File",
-            description: "There was a problem processing the selected file.",
-            variant: "destructive",
-          });
-          setNewResumeFileName('');
-        }
-      });
-    }
-  };
-  
   const handleAddProfile = () => {
     if (!newProfileName || !newResume || !newJd) {
       toast({
@@ -138,11 +95,7 @@ export default function DashboardPage() {
     // Clear form
     setNewProfileName('');
     setNewResume('');
-    setNewResumeFileName('');
     setNewJd('');
-    if(resumeInputRef.current) {
-        resumeInputRef.current.value = '';
-    }
     
     toast({
       title: "Profile Created!",
@@ -198,29 +151,13 @@ export default function DashboardPage() {
              </div>
              <div className="space-y-2">
                 <Label htmlFor="resume">Resume</Label>
-                 <input
-                    type="file"
-                    id="resume-upload"
-                    ref={resumeInputRef}
-                    onChange={handleResumeFileChange}
-                    className="hidden"
-                    accept=".pdf,.docx"
-                  />
-                <Button
-                    variant="outline"
-                    className="w-full justify-start"
-                    onClick={() => resumeInputRef.current?.click()}
-                    disabled={isPending}
-                  >
-                    {isPending ? <LoadingSpinner className="mr-2" /> : <Upload className="mr-2 h-4 w-4" />}
-                    {newResumeFileName || 'Upload .pdf, or .docx'}
-                 </Button>
+                <Textarea id="resume" value={newResume} onChange={(e) => setNewResume(e.target.value)} placeholder="Paste your resume here..." className="min-h-[100px]" />
              </div>
              <div className="space-y-2">
                 <Label htmlFor="jd">Job Description</Label>
                 <Textarea id="jd" value={newJd} onChange={(e) => setNewJd(e.target.value)} placeholder="Paste the job description here..." className="min-h-[100px]" />
              </div>
-             <Button onClick={handleAddProfile} className="w-full" disabled={isPending || !newResume}>
+             <Button onClick={handleAddProfile} className="w-full">
                 <PlusCircle /> Save Profile
              </Button>
           </div>
@@ -326,5 +263,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
