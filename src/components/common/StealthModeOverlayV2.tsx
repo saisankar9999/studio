@@ -128,6 +128,7 @@ export function StealthModeOverlayV2({
       // Clean up mic stream when component unmounts
       micStream?.getTracks().forEach((track) => track.stop());
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
 
