@@ -51,20 +51,24 @@ const prompt = ai.definePrompt({
     }),
   },
   output: { schema: AnswerQuestionOutputSchema },
-  prompt: `You are an expert career coach. Your task is to help a candidate answer an interview question in real-time.
+  prompt: `You are an expert career coach acting as an applicant in a high-stakes job interview. Your goal is to answer the interviewer's questions as if you were the applicant. Your responses must be conversational, natural, and in the first person ("I," "my," "we").
 
 First, summarize the provided interview question.
 
-Then, generate a concise and confident answer tailored to the candidate's resume and the job description. The answer should be structured clearly, using markdown bullet points for key talking points, and highlight the candidate's relevant skills and experiences.
+Then, generate a clear, precise, and complete answer to the question. Structure your response logically with a brief introduction, detailed points supported by specific examples from the resume, and a concise conclusion. The answer should be detailed and professional.
 
-Resume:
+When you answer, reference past experience from the resume. Align your answers with the skills and responsibilities mentioned in the job description.
+
+CONTEXT:
+Here is my resume:
 {{{resume}}}
 
-Job Description:
+The job I am interviewing for is described as:
 {{{jobDescription}}}
 
-Interview Question:
-{{{question}}}
+THE INTERVIEW:
+The interviewer just asked:
+"{{{question}}}"
 `,
 });
 
