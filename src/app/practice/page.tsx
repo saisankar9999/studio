@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useTransition, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   FileText,
   Briefcase,
@@ -25,9 +25,17 @@ import type { GenerateInterviewQuestionsOutput } from '@/ai/flows/generate-inter
 import { generateQuestionsAction } from './actions';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+interface Profile {
+  id: string;
+  name: string;
+  resume: string;
+  jobDescription: string;
+}
+
 export default function PracticePage() {
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
 
   const [resumeContent, setResumeContent] = useState('');
@@ -37,6 +45,33 @@ export default function PracticePage() {
     useState<GenerateInterviewQuestionsOutput | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const profileId = searchParams.get('profile');
+    if (profileId) {
+      try {
+        const savedProfiles = localStorage.getItem('interviewProfiles');
+        if (savedProfiles) {
+          const profiles: Profile[] = JSON.parse(savedProfiles);
+          const profile = profiles.find(p => p.id === profileId);
+          if (profile) {
+            setResumeContent(profile.resume);
+            setJobDescription(profile.jobDescription);
+            toast({
+              title: `Profile "${profile.name}" Loaded`,
+              description: "You can now generate questions.",
+            });
+          }
+        }
+      } catch (error) {
+        toast({
+          title: 'Error loading profile',
+          variant: 'destructive',
+        });
+      }
+    }
+  }, [searchParams, toast]);
+
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -63,7 +98,7 @@ export default function PracticePage() {
     if (!resumeContent) {
       toast({
         title: 'Missing Resume',
-        description: 'Please upload your resume to generate questions.',
+        description: 'Please upload or select a profile with a resume.',
         variant: 'destructive',
       });
       return;
@@ -72,7 +107,7 @@ export default function PracticePage() {
       toast({
         title: 'Missing Job Description',
         description:
-          'Please paste the job description to generate tailored questions.',
+          'Please paste or select a profile with a job description.',
         variant: 'destructive',
       });
       return;
@@ -157,13 +192,20 @@ export default function PracticePage() {
                 className="hidden"
                 accept=".txt,.pdf"
               />
+               <Textarea
+                id="resume-content"
+                placeholder="Paste your resume here, or upload a file..."
+                className="min-h-[150px] resize-y"
+                value={resumeContent}
+                onChange={(e) => setResumeContent(e.target.value)}
+              />
               <Button
                 variant="outline"
                 className="w-full justify-start"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                {resumeFileName || 'Select a .txt or .pdf file'}
+                {resumeFileName || 'Or upload a .txt or .pdf file'}
               </Button>
             </div>
             <div className="space-y-2">
@@ -171,7 +213,7 @@ export default function PracticePage() {
               <Textarea
                 id="job-description"
                 placeholder="Paste the job description here..."
-                className="min-h-[200px] resize-y"
+                className="min-h-[150px] resize-y"
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
               />
