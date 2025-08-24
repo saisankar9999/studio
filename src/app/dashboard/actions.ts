@@ -6,19 +6,13 @@ interface ActionResult {
   error: string | null;
 }
 
-export async function extractTextFromFileAction(input: {
-  fileDataUri: string;
-  mimeType: string;
-}): Promise<ActionResult> {
+export async function extractTextFromFileAction(
+  formData: FormData
+): Promise<ActionResult> {
   try {
-    // We are now calling a dedicated API route instead of a Genkit flow.
-    // This is to isolate the pdf-parse dependency which causes issues with the Next.js server build.
     const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/extract-text`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(input),
+        body: formData,
         cache: 'no-store', // Ensure fresh execution
     });
     
@@ -35,3 +29,5 @@ export async function extractTextFromFileAction(input: {
     return { text: null, error };
   }
 }
+
+    

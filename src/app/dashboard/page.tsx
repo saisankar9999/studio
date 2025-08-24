@@ -75,33 +75,32 @@ export default function DashboardPage() {
       setNewResumeFileName(file.name);
       startTransition(async () => {
         try {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async (e) => {
-              const dataUri = e.target?.result as string;
-              const result = await extractTextFromFileAction({ fileDataUri: dataUri, mimeType: file.type });
-              if (result.error) {
-                  toast({
-                    title: "Error Parsing File",
-                    description: result.error,
-                    variant: "destructive",
-                  });
-                  setNewResumeFileName('');
-              } else {
-                  setNewResume(result.text ?? '');
-                  toast({
-                      title: "Resume Uploaded",
-                      description: `${file.name} was successfully parsed.`
-                  })
-              }
-            };
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const result = await extractTextFromFileAction(formData);
+          
+          if (result.error) {
+            toast({
+              title: "Error Parsing File",
+              description: result.error,
+              variant: "destructive",
+            });
+            setNewResumeFileName('');
+          } else {
+            setNewResume(result.text ?? '');
+            toast({
+              title: "Resume Uploaded",
+              description: `${file.name} was successfully parsed.`,
+            });
+          }
         } catch (error) {
-             toast({
-                title: "Error Reading File",
-                description: "There was a problem reading the selected file.",
-                variant: "destructive",
-              });
-             setNewResumeFileName('');
+          toast({
+            title: "Error Reading File",
+            description: "There was a problem processing the selected file.",
+            variant: "destructive",
+          });
+          setNewResumeFileName('');
         }
       });
     }
@@ -201,10 +200,11 @@ export default function DashboardPage() {
                 <Label htmlFor="resume">Resume</Label>
                  <input
                     type="file"
+                    id="resume-upload"
                     ref={resumeInputRef}
                     onChange={handleResumeFileChange}
                     className="hidden"
-                    accept=".txt,.pdf,.docx"
+                    accept=".pdf,.docx"
                   />
                 <Button
                     variant="outline"
@@ -212,8 +212,8 @@ export default function DashboardPage() {
                     onClick={() => resumeInputRef.current?.click()}
                     disabled={isPending}
                   >
-                    {isPending ? <LoadingSpinner className="mr-2" /> : <Upload />}
-                    {newResumeFileName || 'Upload .txt, .pdf, or .docx'}
+                    {isPending ? <LoadingSpinner className="mr-2" /> : <Upload className="mr-2 h-4 w-4" />}
+                    {newResumeFileName || 'Upload .pdf, or .docx'}
                  </Button>
              </div>
              <div className="space-y-2">
@@ -326,3 +326,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
