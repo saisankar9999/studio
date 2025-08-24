@@ -11,7 +11,7 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import mammoth from 'mammoth';
-import pdf from 'pdf-parse';
+// Note: pdf-parse is imported dynamically below to avoid server startup issues.
 
 const ExtractTextFromFileInputSchema = z.object({
   fileDataUri: z
@@ -44,6 +44,8 @@ const extractTextFromFileFlow = ai.defineFlow(
       const buffer = Buffer.from(base64Data, 'base64');
 
       if (mimeType === 'application/pdf') {
+        // Dynamically import pdf-parse to fix Next.js server error
+        const pdf = (await import('pdf-parse')).default;
         const data = await pdf(buffer);
         return data.text;
       } else if (
@@ -64,5 +66,3 @@ const extractTextFromFileFlow = ai.defineFlow(
     }
   }
 );
-
-    
