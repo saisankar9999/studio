@@ -4,7 +4,7 @@
 import { useState, useTransition, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import TranscriptionDisplay from '@/components/TranscriptionDisplay';
-import { answerQuestion } from '@/ai/flows/answer-question';
+import { answerQuestionAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AnswerDisplay from '@/components/AnswerDisplay';
@@ -79,21 +79,25 @@ export default function InterviewCopilot() {
         const base64Audio = reader.result as string;
 
         try {
-          const result = await answerQuestion({
+          const result = await answerQuestionAction({
             audioDataUri: base64Audio,
             jobDescription: jobDescription,
             resume: resume,
           });
 
-          if (result && result.transcribedQuestion) {
-            setTranscript(result.transcribedQuestion);
-            setAnswer(result.answer);
+          if (result.error) {
+            throw new Error(result.error);
+          }
+
+          if (result.answer && result.answer.transcribedQuestion) {
+            setTranscript(result.answer.transcribedQuestion);
+            setAnswer(result.answer.answer);
             toast({
               title: 'Answer Generated',
               description: 'The suggested answer is ready.',
             });
           } else {
-            setTranscript('Sorry, could not transcribe the audio.');
+            setTranscript('Sorry, could not process the audio.');
              toast({
               title: 'Error',
               description: 'Failed to process audio.',
@@ -151,5 +155,3 @@ export default function InterviewCopilot() {
     </div>
   );
 }
-
-    
