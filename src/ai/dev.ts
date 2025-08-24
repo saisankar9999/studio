@@ -6,6 +6,4 @@ import '@/ai/flows/generate-interview-questions.ts';
 import '@/ai/flows/analyze-interview-performance.ts';
 import '@/ai/flows/transcribe-audio.ts';
 import '@/ai/flows/answer-question.ts';
-import '@/ai/flows/extract-text-from-file.ts';
-
     
