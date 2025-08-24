@@ -62,7 +62,8 @@ const extractTextFromFileFlow = ai.defineFlow(
     } catch (error) {
       console.error(`Error parsing file with MIME type ${mimeType}:`, error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during file parsing.';
-      throw new Error(`Failed to extract text from file. ${errorMessage}`);
+      // Re-throw the specific error to be displayed on the client.
+      throw new Error(errorMessage);
     }
   }
 );
