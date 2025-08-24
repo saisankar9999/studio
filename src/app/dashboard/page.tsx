@@ -206,7 +206,6 @@ export default function DashboardPage() {
                     className="hidden"
                     accept=".txt,.pdf,.docx"
                   />
-                <Textarea id="resume" value={newResume} onChange={(e) => setNewResume(e.target.value)} placeholder="Paste your resume text here, or upload a file..." className="min-h-[100px]" />
                 <Button
                     variant="outline"
                     className="w-full justify-start"
@@ -221,7 +220,7 @@ export default function DashboardPage() {
                 <Label htmlFor="jd">Job Description</Label>
                 <Textarea id="jd" value={newJd} onChange={(e) => setNewJd(e.target.value)} placeholder="Paste the job description here..." className="min-h-[100px]" />
              </div>
-             <Button onClick={handleAddProfile} className="w-full" disabled={isPending}>
+             <Button onClick={handleAddProfile} className="w-full" disabled={isPending || !newResume}>
                 <PlusCircle /> Save Profile
              </Button>
           </div>
@@ -327,5 +326,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
