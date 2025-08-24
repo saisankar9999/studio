@@ -41,13 +41,21 @@ export default function PracticePage() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = e.target?.result as string;
-        setResumeContent(text);
-        setResumeFileName(file.name);
-      };
-      reader.readAsText(file);
+      if (file.type.startsWith('application/pdf') || file.type.startsWith('text/plain')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target?.result as string;
+          setResumeContent(text);
+          setResumeFileName(file.name);
+        };
+        reader.readAsText(file);
+      } else {
+        toast({
+            title: 'Unsupported File Type',
+            description: 'Please upload a .txt or .pdf file.',
+            variant: 'destructive'
+        })
+      }
     }
   };
 
@@ -147,7 +155,7 @@ export default function PracticePage() {
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 className="hidden"
-                accept=".txt,.pdf,.doc,.docx"
+                accept=".txt,.pdf"
               />
               <Button
                 variant="outline"
@@ -155,7 +163,7 @@ export default function PracticePage() {
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                {resumeFileName || 'Select a file'}
+                {resumeFileName || 'Select a .txt or .pdf file'}
               </Button>
             </div>
             <div className="space-y-2">

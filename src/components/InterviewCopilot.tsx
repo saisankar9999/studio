@@ -1,13 +1,11 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import TranscriptionDisplay from './TranscriptionDisplay';
-import AnswerDisplay from './AnswerDisplay';
 import { answerQuestion } from '@/ai/flows/answer-question';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingSpinner } from './common/LoadingSpinner';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 
 export default function InterviewCopilot() {
@@ -28,26 +26,37 @@ export default function InterviewCopilot() {
       reader.onloadend = async () => {
         const base64Audio = reader.result as string;
 
-        const result = await answerQuestion({
-          audioDataUri: base64Audio,
-          jobDescription: jobDescription,
-          resume: resume,
-        });
+        try {
+          const result = await answerQuestion({
+            audioDataUri: base64Audio,
+            jobDescription: jobDescription,
+            resume: resume,
+          });
 
-        if (result && result.transcribedQuestion) {
-          setTranscript(result.transcribedQuestion);
-          setAnswer(result.answer);
-          toast({
-            title: 'Answer Generated',
-            description: 'The suggested answer is ready.',
-          });
-        } else {
-          setTranscript('Sorry, could not transcribe the audio.');
-           toast({
-            title: 'Error',
-            description: 'Failed to process audio.',
-            variant: 'destructive',
-          });
+          if (result && result.transcribedQuestion) {
+            setTranscript(result.transcribedQuestion);
+            setAnswer(result.answer);
+            toast({
+              title: 'Answer Generated',
+              description: 'The suggested answer is ready.',
+            });
+          } else {
+            setTranscript('Sorry, could not transcribe the audio.');
+             toast({
+              title: 'Error',
+              description: 'Failed to process audio.',
+              variant: 'destructive',
+            });
+          }
+        } catch (error) {
+            console.error(error);
+            const errorMessage = error instanceof Error ? error.message : "An unknown error occured."
+            setTranscript(`Error: ${errorMessage}`);
+            toast({
+                title: "Error",
+                description: errorMessage,
+                variant: 'destructive'
+            })
         }
       };
       reader.onerror = () => {

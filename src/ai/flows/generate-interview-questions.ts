@@ -14,7 +14,7 @@ import {z} from 'genkit';
 const GenerateInterviewQuestionsInputSchema = z.object({
   resume: z
     .string()
-    .describe('The resume of the candidate.'),
+    .describe("The resume of the candidate."),
   jobDescription: z.string().describe('The job description for the position.'),
 });
 export type GenerateInterviewQuestionsInput = z.infer<

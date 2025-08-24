@@ -13,8 +13,8 @@ import {z} from 'genkit';
 
 const AnalyzeInterviewPerformanceInputSchema = z.object({
   question: z.string().describe('The interview question asked.'),
-  answer: z.string().describe('The candidate\'s answer to the question.'),
-  resume: z.string().describe('The candidate\'s resume text content.'),
+  answer: z.string().describe("The candidate's answer to the question."),
+  resume: z.string().describe("The candidate's resume text content."),
   jobDescription: z.string().describe('The job description for the role.'),
 });
 export type AnalyzeInterviewPerformanceInput = z.infer<
@@ -25,12 +25,12 @@ const AnalyzeInterviewPerformanceOutputSchema = z.object({
   score: z
     .number()
     .describe(
-      'A score between 0 and 100 representing the candidate\'s performance.'
+      "A score between 0 and 100 representing the candidate's performance."
     ),
   feedback: z
     .string()
     .describe(
-      'Feedback on the candidate\'s answer, including confidence and relevance, personalized according to the resume.'
+      "Feedback on the candidate's answer, including confidence and relevance, personalized according to the resume."
     ),
 });
 export type AnalyzeInterviewPerformanceOutput = z.infer<

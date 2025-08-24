@@ -24,7 +24,6 @@ import type { GenerateInterviewQuestionsOutput } from '@/ai/flows/generate-inter
 import type { AnalyzeInterviewPerformanceOutput } from '@/ai/flows/analyze-interview-performance';
 import { transcribeAndAnalyzeAnswerAction } from './actions';
 import Link from 'next/link';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface InterviewData {
   questions: GenerateInterviewQuestionsOutput;
