@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { LoadingSpinner } from './common/LoadingSpinner';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Textarea } from './ui/textarea';
+import AnswerDisplay from './AnswerDisplay';
 
 export default function InterviewCopilot() {
   const { toast } = useToast();
@@ -71,27 +72,24 @@ export default function InterviewCopilot() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 font-body">
-      <div className="max-w-7xl mx-auto">
-        <header className="mb-8">
-          <h1 className="text-4xl font-bold text-center font-headline">
-            Interview Copilot
-          </h1>
-          <p className="text-center text-muted-foreground mt-2">
-            Your AI-powered assistant for acing interviews
-          </p>
-        </header>
+    <div className="container mx-auto max-w-6xl p-4 py-8">
+       <h1 className="mb-2 font-headline text-4xl font-bold">
+        Live Interview Co-pilot
+      </h1>
+      <p className="mb-8 text-muted-foreground">
+        Use your microphone to capture the interviewer's question and get a real-time suggested answer.
+      </p>
 
         <main>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-             <Card className="bg-card/50">
+             <Card>
                 <CardHeader>
                     <CardTitle className="text-lg">Context</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div>
-                        <label htmlFor="resume" className="block text-sm font-medium mb-1">Resume</label>
-                        <Textarea id="resume" placeholder="Paste your resume here..." value={resume} onChange={e => setResume(e.target.value)} className="min-h-[100px]"/>
+                        <label htmlFor="resume" className="block text-sm font-medium mb-1">Your Resume</label>
+                        <Textarea id="resume" placeholder="Paste your resume here for tailored answers..." value={resume} onChange={e => setResume(e.target.value)} className="min-h-[100px]"/>
                     </div>
                     <div>
                         <label htmlFor="jd" className="block text-sm font-medium mb-1">Job Description</label>
@@ -99,17 +97,17 @@ export default function InterviewCopilot() {
                     </div>
                 </CardContent>
              </Card>
-             <Card className="bg-card/50">
+             <Card>
                 <CardHeader>
                     <CardTitle className="text-lg">Keyboard Shortcuts</CardTitle>
                 </CardHeader>
                  <CardContent>
                     <ul className="text-sm space-y-2 text-muted-foreground">
                     <li>
-                        <kbd className="font-mono p-1 bg-muted rounded-sm">R</kbd> - Start Recording
+                        Press <kbd className="font-mono p-1 bg-muted rounded-sm">R</kbd> to start recording the interviewer's question.
                     </li>
                     <li>
-                        <kbd className="font-mono p-1 bg-muted rounded-sm">S</kbd> - Stop and Process
+                        Press <kbd className="font-mono p-1 bg-muted rounded-sm">S</kbd> to stop recording and generate an answer.
                     </li>
                     </ul>
                 </CardContent>
@@ -117,18 +115,9 @@ export default function InterviewCopilot() {
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <TranscriptionDisplay onAudioSubmit={handleAudioTranscription} transcript={transcript} isPending={isPending} />
-            
-            <Card className="bg-card/50">
-                <CardHeader>
-                    <CardTitle className="text-lg">Suggested Answer</CardTitle>
-                </CardHeader>
-                <CardContent className="min-h-[20rem] prose prose-sm dark:prose-invert max-w-none">
-                    {isPending && !answer ? <div className="flex items-center justify-center h-full"><LoadingSpinner/></div> : <p>{answer || "Answer will appear here..."}</p>}
-                </CardContent>
-            </Card>
+            <AnswerDisplay answer={answer} isLoading={isPending} />
           </div>
         </main>
-      </div>
     </div>
   );
 }
