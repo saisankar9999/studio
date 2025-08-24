@@ -24,7 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import type { AnalyzeCodeQualityOutput } from '@/ai/flows/analyze-code-quality';
 import { analyzeCodeAction, answerQuestionAction, analyzeScreenAction } from './actions';
-import { AlertCircle, Terminal, Mic, Video, StopCircle, ScanScreen } from 'lucide-react';
+import { AlertCircle, Terminal, Mic, Video, StopCircle, Scan } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { StealthModeOverlay } from '@/components/common/StealthModeOverlay';
 import type { AnswerQuestionOutput } from '@/ai/flows/answer-question';
@@ -412,7 +412,7 @@ export default function LivePage() {
                     <Label>Screen Analysis</Label>
                     <p className="text-sm text-muted-foreground">Capture your screen to analyze code or text from the interview.</p>
                     <Button onClick={handleAnalyzeScreen} disabled={!stealthMode || isPending} className="w-full">
-                      <ScanScreen className="mr-2" /> Analyze Screen
+                      <Scan className="mr-2" /> Analyze Screen
                     </Button>
                   </div>
                 </div>
