@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useTransition, useEffect } from 'react';
@@ -39,12 +40,9 @@ export default function PracticePage() {
   const [isPending, startTransition] = useTransition();
 
   const [resumeContent, setResumeContent] = useState('');
-  const [resumeFileName, setResumeFileName] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [generatedQuestions, setGeneratedQuestions] =
     useState<GenerateInterviewQuestionsOutput | null>(null);
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const profileId = searchParams.get('profile');
@@ -72,27 +70,6 @@ export default function PracticePage() {
     }
   }, [searchParams, toast]);
 
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (file.type.startsWith('text/plain')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target?.result as string;
-          setResumeContent(text);
-          setResumeFileName(file.name);
-        };
-        reader.readAsText(file);
-      } else {
-        toast({
-            title: 'Unsupported File Type',
-            description: 'Please upload a .txt file.',
-            variant: 'destructive'
-        })
-      }
-    }
-  };
 
   const handleGenerateClick = () => {
     if (!resumeContent) {
@@ -184,29 +161,14 @@ export default function PracticePage() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="resume">Upload Resume</Label>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                className="hidden"
-                accept=".txt"
-              />
+              <Label htmlFor="resume">Your Resume</Label>
                <Textarea
                 id="resume-content"
-                placeholder="Paste your resume here, or upload a file..."
+                placeholder="Paste your resume here..."
                 className="min-h-[150px] resize-y"
                 value={resumeContent}
                 onChange={(e) => setResumeContent(e.target.value)}
               />
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                {resumeFileName || 'Or upload a .txt file'}
-              </Button>
             </div>
             <div className="space-y-2">
               <Label htmlFor="job-description">Job Description</Label>
@@ -287,3 +249,5 @@ export default function PracticePage() {
     </div>
   );
 }
+
+    

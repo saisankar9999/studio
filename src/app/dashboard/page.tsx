@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useTransition } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { extractTextFromFileAction } from './actions';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
 interface Profile {
   id: string;
@@ -29,6 +31,7 @@ export default function DashboardPage() {
   const [newResumeFileName, setNewResumeFileName] = useState('');
   const [newJd, setNewJd] = useState('');
   
+  const [isPending, startTransition] = useTransition();
   const resumeInputRef = useRef<HTMLInputElement>(null);
   
   // Load profiles from local storage on mount
@@ -69,21 +72,38 @@ export default function DashboardPage() {
   const handleResumeFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      if (file.type.startsWith('text/plain')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target?.result as string;
-          setNewResume(text);
-          setNewResumeFileName(file.name);
-        };
-        reader.readAsText(file);
-      } else {
-        toast({
-            title: 'Unsupported File Type',
-            description: 'Please upload a .txt file for the resume.',
-            variant: 'destructive'
-        })
-      }
+      setNewResumeFileName(file.name);
+      startTransition(async () => {
+        try {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async (e) => {
+              const dataUri = e.target?.result as string;
+              const result = await extractTextFromFileAction({ fileDataUri: dataUri, mimeType: file.type });
+              if (result.error) {
+                  toast({
+                    title: "Error Parsing File",
+                    description: result.error,
+                    variant: "destructive",
+                  });
+                  setNewResumeFileName('');
+              } else {
+                  setNewResume(result.text ?? '');
+                  toast({
+                      title: "Resume Uploaded",
+                      description: `${file.name} was successfully parsed.`
+                  })
+              }
+            };
+        } catch (error) {
+             toast({
+                title: "Error Reading File",
+                description: "There was a problem reading the selected file.",
+                variant: "destructive",
+              });
+             setNewResumeFileName('');
+        }
+      });
     }
   };
   
@@ -146,7 +166,6 @@ export default function DashboardPage() {
   
   const practiceLink = selectedProfile 
     ? `/practice?profile=${selectedProfileId}` 
-    // ? `/practice?profile=${selectedProfileId}` 
     : '/practice';
     
   const liveLink = selectedProfile 
@@ -185,23 +204,24 @@ export default function DashboardPage() {
                     ref={resumeInputRef}
                     onChange={handleResumeFileChange}
                     className="hidden"
-                    accept=".txt"
+                    accept=".txt,.pdf,.docx"
                   />
-                <Textarea id="resume" value={newResume} onChange={(e) => setNewResume(e.target.value)} placeholder="Paste your resume text here..." className="min-h-[100px]" />
+                <Textarea id="resume" value={newResume} onChange={(e) => setNewResume(e.target.value)} placeholder="Paste your resume text here, or upload a file..." className="min-h-[100px]" />
                 <Button
                     variant="outline"
                     className="w-full justify-start"
                     onClick={() => resumeInputRef.current?.click()}
+                    disabled={isPending}
                   >
-                    <Upload />
-                    {newResumeFileName || 'Or upload a .txt file'}
+                    {isPending ? <LoadingSpinner className="mr-2" /> : <Upload />}
+                    {newResumeFileName || 'Upload .txt, .pdf, or .docx'}
                  </Button>
              </div>
              <div className="space-y-2">
                 <Label htmlFor="jd">Job Description</Label>
                 <Textarea id="jd" value={newJd} onChange={(e) => setNewJd(e.target.value)} placeholder="Paste the job description here..." className="min-h-[100px]" />
              </div>
-             <Button onClick={handleAddProfile} className="w-full">
+             <Button onClick={handleAddProfile} className="w-full" disabled={isPending}>
                 <PlusCircle /> Save Profile
              </Button>
           </div>
@@ -307,3 +327,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
