@@ -29,39 +29,17 @@ export async function analyzeCodeQuality(input: AnalyzeCodeQualityInput): Promis
   return analyzeCodeQualityFlow(input);
 }
 
-const analyzeCodeQualityTool = ai.defineTool({
-  name: 'analyzeCode',
-  description: 'Analyzes code for quality, efficiency, and correctness, providing a score and suggestions for improvement.',
-  inputSchema: AnalyzeCodeQualityInputSchema,
-  outputSchema: AnalyzeCodeQualityOutputSchema,
-},
-async (input) => {
-  // Placeholder implementation for code analysis.
-  // In a real application, this would involve static analysis tools,
-  // linters, and potentially execution within a sandbox.
-  // For now, return some dummy data.
-  return {
-    qualityScore: 75,
-    efficiencySuggestions: 'Consider using more efficient algorithms for large datasets.',
-    correctnessAnalysis: 'No immediate errors detected, but further testing is recommended.',
-    bestPractices: 'Follow language-specific coding style guidelines.',
-  };
-});
-
 const analyzeCodeQualityPrompt = ai.definePrompt({
   name: 'analyzeCodeQualityPrompt',
   input: {schema: AnalyzeCodeQualityInputSchema},
   output: {schema: AnalyzeCodeQualityOutputSchema},
-  tools: [analyzeCodeQualityTool],
   prompt: `You are an expert software engineer reviewing code submitted during a live interview.
 Analyze the following code for quality, efficiency, and correctness. Provide a quality score (0-100), suggestions for improvement, and an analysis of potential errors.
 
 Code:
-\`\`\`{{{language}}}
+\`\`\`{{language}}
 {{{code}}}
 \`\`\`
-
-Use the analyzeCode tool to perform the analysis.
 `,
 });
 

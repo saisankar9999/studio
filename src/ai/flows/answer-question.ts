@@ -30,7 +30,7 @@ const AnswerQuestionOutputSchema = z.object({
   answer: z
     .string()
     .describe(
-      'A tailored answer to the question based on the resume and job description.'
+      'A tailored answer to the question based on the resume and job description. Use markdown for formatting, like bullet points.'
     ),
 });
 export type AnswerQuestionOutput = z.infer<typeof AnswerQuestionOutputSchema>;
@@ -55,7 +55,7 @@ const prompt = ai.definePrompt({
 
 First, summarize the provided interview question.
 
-Then, generate a concise and confident answer tailored to the candidate's resume and the job description. The answer should be structured clearly, perhaps using bullet points if appropriate, and highlight the candidate's relevant skills and experiences.
+Then, generate a concise and confident answer tailored to the candidate's resume and the job description. The answer should be structured clearly, using markdown bullet points for key talking points, and highlight the candidate's relevant skills and experiences.
 
 Resume:
 {{{resume}}}
@@ -92,5 +92,3 @@ const answerQuestionFlow = ai.defineFlow(
     return output!;
   }
 );
-
-    

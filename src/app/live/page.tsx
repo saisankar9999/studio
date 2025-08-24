@@ -220,7 +220,7 @@ export default function LivePage() {
                <h4 className="font-semibold">Summarized Question:</h4>
                <p className="text-muted-foreground">{stealthContent.summarizedQuestion}</p>
                <h4 className="font-semibold">Suggested Answer:</h4>
-               <p className="text-muted-foreground">{stealthContent.answer}</p>
+               <div className="prose prose-sm dark:prose-invert" dangerouslySetInnerHTML={{ __html: stealthContent.answer.replace(/\n/g, '<br />') }} />
              </div>
            )}
            {stealthContent && 'analysis' in stealthContent && (
@@ -228,7 +228,7 @@ export default function LivePage() {
                <h4 className="font-semibold">Analysis:</h4>
                <p className="text-muted-foreground">{stealthContent.analysis}</p>
                 <h4 className="font-semibold">Suggestion:</h4>
-               <p className="text-muted-foreground">{stealthContent.suggestion}</p>
+               <div className="prose prose-sm dark:prose-invert" dangerouslySetInnerHTML={{ __html: stealthContent.suggestion.replace(/\n/g, '<br />') }} />
              </div>
            )}
          </StealthModeOverlay>
@@ -242,7 +242,7 @@ export default function LivePage() {
       </p>
 
       <Tabs defaultValue="code-analyzer" className="w-full">
-        <TabsList className="grid w-full grid-cols-1 md:w-[400px]">
+        <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
           <TabsTrigger value="code-analyzer">
             <Terminal className="mr-2 h-4 w-4" /> Code Analyzer
           </TabsTrigger>
@@ -318,7 +318,7 @@ export default function LivePage() {
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between text-lg">
                           <span>Quality Score</span>
-                          <Badge variant="secondary">
+                          <Badge variant={analysisResult.qualityScore > 80 ? 'default' : analysisResult.qualityScore > 60 ? 'secondary' : 'destructive'}>
                             {analysisResult.qualityScore} / 100
                           </Badge>
                         </CardTitle>
@@ -379,7 +379,7 @@ export default function LivePage() {
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>How to Use Stealth Mode</AlertTitle>
                   <AlertDescription>
-                    When your interview starts, share your **entire screen**, not just the browser window. Then, activate Stealth Mode. You can drag the overlay to position it conveniently over your meeting window. The overlay will not be visible to others.
+                    When your interview starts, share your **entire screen**, not just the browser window. Then, activate Stealth Mode. You can drag the overlay to position it conveniently. The overlay will **not** be visible to others.
                   </AlertDescription>
                 </Alert>
 
@@ -421,15 +421,6 @@ export default function LivePage() {
           </Card>
         </TabsContent>
       </Tabs>
-      <Alert className="mt-8">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Important Note for Live Interviews</AlertTitle>
-        <AlertDescription>
-          When screen sharing, always choose to share your **entire screen** or desktop. Do NOT share just the browser window, as this will prevent the stealth overlay from working correctly. Arrange your windows side-by-side for discreet access.
-        </AlertDescription>
-      </Alert>
     </div>
   );
 }
-
-    

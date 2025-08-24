@@ -72,5 +72,3 @@ export async function analyzeScreenAction(
     return { analysis: null, error };
   }
 }
-
-    

@@ -22,7 +22,7 @@ export type AnalyzeScreenInput = z.infer<typeof AnalyzeScreenInputSchema>;
 
 const AnalyzeScreenOutputSchema = z.object({
   analysis: z.string().describe('An analysis of the content on the screen (e.g., what a piece of code does, or the key point of a question).'),
-  suggestion: z.string().describe('A specific suggestion, such as how to answer a question, how to improve the code, or what to do next.'),
+  suggestion: z.string().describe('A specific suggestion, such as how to answer a question, how to improve the code, or what to do next. Use markdown for formatting, like code blocks and bullet points.'),
 });
 export type AnalyzeScreenOutput = z.infer<typeof AnalyzeScreenOutputSchema>;
 
@@ -47,7 +47,7 @@ The screenshot could contain:
 
 Based on the image, provide:
 1.  A brief 'analysis' of what you see (e.g., "This is a Python function to find prime numbers," or "The question asks about the trade-offs of microservices.").
-2.  A 'suggestion' for the candidate (e.g., "Consider edge cases like negative numbers or zero," or "Mention scalability and fault tolerance in your answer.").
+2.  A 'suggestion' for the candidate (e.g., "Consider edge cases like negative numbers or zero," or "Mention scalability and fault tolerance in your answer."). Use markdown for formatting, like code blocks and bullet points, to make it easy to read.
 
 Be discreet and to the point.
 
@@ -66,5 +66,3 @@ const analyzeScreenFlow = ai.defineFlow(
     return output!;
   }
 );
-
-    
