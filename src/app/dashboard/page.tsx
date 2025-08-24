@@ -1,10 +1,11 @@
+
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle } from 'lucide-react';
+import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle, Upload } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -25,7 +26,10 @@ export default function DashboardPage() {
   
   const [newProfileName, setNewProfileName] = useState('');
   const [newResume, setNewResume] = useState('');
+  const [newResumeFileName, setNewResumeFileName] = useState('');
   const [newJd, setNewJd] = useState('');
+  
+  const resumeInputRef = useRef<HTMLInputElement>(null);
   
   // Load profiles from local storage on mount
   useEffect(() => {
@@ -62,6 +66,27 @@ export default function DashboardPage() {
     }
   }, [profiles, selectedProfileId]);
   
+  const handleResumeFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.type.startsWith('text/plain')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target?.result as string;
+          setNewResume(text);
+          setNewResumeFileName(file.name);
+        };
+        reader.readAsText(file);
+      } else {
+        toast({
+            title: 'Unsupported File Type',
+            description: 'Please upload a .txt file for the resume.',
+            variant: 'destructive'
+        })
+      }
+    }
+  };
+  
   const handleAddProfile = () => {
     if (!newProfileName || !newResume || !newJd) {
       toast({
@@ -94,7 +119,11 @@ export default function DashboardPage() {
     // Clear form
     setNewProfileName('');
     setNewResume('');
+    setNewResumeFileName('');
     setNewJd('');
+    if(resumeInputRef.current) {
+        resumeInputRef.current.value = '';
+    }
     
     toast({
       title: "Profile Created!",
@@ -117,6 +146,7 @@ export default function DashboardPage() {
   
   const practiceLink = selectedProfile 
     ? `/practice?profile=${selectedProfileId}` 
+    // ? `/practice?profile=${selectedProfileId}` 
     : '/practice';
     
   const liveLink = selectedProfile 
@@ -150,7 +180,22 @@ export default function DashboardPage() {
              </div>
              <div className="space-y-2">
                 <Label htmlFor="resume">Resume</Label>
+                 <input
+                    type="file"
+                    ref={resumeInputRef}
+                    onChange={handleResumeFileChange}
+                    className="hidden"
+                    accept=".txt"
+                  />
                 <Textarea id="resume" value={newResume} onChange={(e) => setNewResume(e.target.value)} placeholder="Paste your resume text here..." className="min-h-[100px]" />
+                <Button
+                    variant="outline"
+                    className="w-full justify-start"
+                    onClick={() => resumeInputRef.current?.click()}
+                  >
+                    <Upload />
+                    {newResumeFileName || 'Or upload a .txt file'}
+                 </Button>
              </div>
              <div className="space-y-2">
                 <Label htmlFor="jd">Job Description</Label>
