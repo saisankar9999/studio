@@ -1,268 +1,471 @@
 
 'use client';
 
-import { useState, useTransition, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useToast } from '@/hooks/use-toast';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import AnswerDisplay from '@/components/AnswerDisplay';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useState, useEffect, useRef } from 'react';
+import { generateInterviewResponse } from '@/ai/flows/generate-interview-response';
 import { Button } from '@/components/ui/button';
-import { Terminal, Mic, StopCircle, AudioLines, BrainCircuit } from 'lucide-react';
-import { answerQuestionAction } from './actions';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Mic, Square, Bot, User, Loader2, Info, Video } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
-interface Profile {
-  id: string;
-  name: string;
-  resume: string;
-  jobDescription: string;
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onstart: () => void;
+  onend: () => void;
+  onerror: (event: any) => void;
+  onresult: (event: any) => void;
+  start: () => void;
+  stop: () => void;
+  new(): SpeechRecognition;
 }
 
-// Simple VAD (Voice Activity Detection) logic
-const VAD_SILENCE_DURATION_MS = 1500; // 1.5 seconds of silence
-const VAD_THRESHOLD = -50; // dB threshold for silence
+declare global {
+  interface Window {
+    SpeechRecognition: SpeechRecognition;
+    webkitSpeechRecognition: SpeechRecognition;
+  }
+}
 
-export default function InterviewCopilot() {
-  const { toast } = useToast();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
-  
-  const [transcript, setTranscript] = useState('');
-  const [answer, setAnswer] = useState('');
-  
-  const [resume, setResume] = useState('');
-  const [jobDescription, setJobDescription] = useState('');
-  
-  // Real-time session state
-  const [isSessionActive, setIsSessionActive] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  
-  const mediaRecorderRef =  useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  
-  useEffect(() => {
-    const profileId = searchParams.get('profile');
-    if (profileId) {
-      try {
-        const savedProfiles = localStorage.getItem('interviewProfiles');
-        if (savedProfiles) {
-          const profiles: Profile[] = JSON.parse(savedProfiles);
-          const profile = profiles.find(p => p.id === profileId);
-          if (profile) {
-            setResume(profile.resume);
-            setJobDescription(profile.jobDescription);
-            toast({
-              title: `Profile "${profile.name}" Loaded`,
-              description: "The co-pilot will use this context for answers.",
-            });
-          } else {
-             toast({ title: "Profile not found.", variant: 'destructive'});
-          }
-        }
-      } catch (error) {
-        toast({
-          title: 'Error loading profile',
-          description: 'Could not load profile from local storage.',
-          variant: 'destructive',
-        });
-      }
-    }
-    
-    // Cleanup on component unmount
-    return () => {
-        stopSession();
-    };
-  }, [searchParams, toast]);
+const resumePlaceholder = `John Doe
+Software Engineer
+newyork@example.com | (123) 456-7890 | linkedin.com/in/johndoe
 
-  const handleAudioProcessing = useCallback((audioBlob: Blob) => {
-    if (!resume || !jobDescription) {
-        toast({
-            title: 'Context Missing',
-            description: 'Please select a profile from the dashboard first.',
-            variant: 'destructive',
-        });
-        return;
-    }
+Summary
+Highly skilled Software Engineer with 5+ years of experience in developing, testing, and maintaining web applications. Proficient in JavaScript, React, Node.js, and cloud technologies.
 
-    startTransition(async () => {
-      setTranscript('Processing...');
-      setAnswer('');
+Experience
+Senior Software Engineer, TechCorp Inc. - New York, NY (2020-Present)
+- Led the development of a new customer-facing dashboard using React and TypeScript, improving user engagement by 25%.
+- Architected and implemented a microservices-based backend with Node.js and Express.
 
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = async () => {
-        const base64Audio = reader.result as string;
-        const result = await answerQuestionAction({
-          audioDataUri: base64Audio,
-          jobDescription: jobDescription,
-          resume: resume,
-        });
-        
-        if (!result) {
-            toast({ title: 'Error', description: 'Received an empty response from the server.', variant: 'destructive' });
-            setTranscript('An unknown error occurred.');
-            return;
-        }
+Education
+Bachelor of Science in Computer Science
+State University, 2015`;
 
-        if (result.error) {
-          toast({ title: "Error", description: result.error, variant: 'destructive' });
-          setTranscript(`Error: ${result.error}`);
-        } else if (result.answer) {
-          setTranscript(result.answer.transcribedQuestion);
-          setAnswer(result.answer.answer);
-          toast({ title: 'Answer Ready', description: 'A suggested answer has been generated.' });
-        } else {
-          setTranscript('Sorry, could not process the audio.');
-        }
+const jobDescriptionPlaceholder = `Senior Frontend Engineer
+At Innovate LLC, we are looking for a passionate Senior Frontend Engineer to join our team.
+
+Responsibilities
+- Develop and maintain user-facing features using React.js.
+- Build reusable components and front-end libraries for future use.
+- Optimize applications for maximum speed and scalability.
+
+Qualifications
+- 5+ years of professional experience in frontend development.
+- Strong proficiency in JavaScript, including DOM manipulation and the JavaScript object model.
+- Thorough understanding of React.js and its core principles.`;
+
+const DraggableStealthOverlay = ({
+  isRecording,
+  isLoading,
+  transcription,
+  aiResponse,
+  onClose,
+}: {
+  isRecording: boolean;
+  isLoading: boolean;
+  transcription: string;
+  aiResponse: string;
+  onClose: () => void;
+}) => {
+  const [position, setPosition] = useState({ x: 100, y: 100 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Only allow dragging from the header
+    if ((e.target as HTMLElement).closest('[data-drag-handle]')) {
+      setIsDragging(true);
+      dragStartPos.current = {
+        x: e.clientX - position.x,
+        y: e.clientY - position.y,
       };
-      reader.onerror = () => {
-         setTranscript('Error reading audio file.');
-         toast({ title: 'Error', description: 'Could not read the recorded audio.', variant: 'destructive' });
-      }
-    });
-  }, [resume, jobDescription, toast]);
-
-  const startSession = useCallback(async () => {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
-        setIsSessionActive(true);
-        setIsListening(true);
-        setTranscript('Session started. Listening for question...');
-
-        audioContextRef.current = new AudioContext();
-        const source = audioContextRef.current.createMediaStreamSource(stream);
-        analyserRef.current = audioContextRef.current.createAnalyser();
-        analyserRef.current.fftSize = 2048;
-        source.connect(analyserRef.current);
-
-        mediaRecorderRef.current = new MediaRecorder(stream);
-        mediaRecorderRef.current.ondataavailable = (event) => {
-            audioChunksRef.current.push(event.data);
-        };
-        
-        mediaRecorderRef.current.onstop = () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-          if (audioBlob.size > 0) {
-            handleAudioProcessing(audioBlob);
-          }
-          audioChunksRef.current = [];
-          // Automatically restart recording if session is still active
-          if (streamRef.current) {
-            mediaRecorderRef.current?.start();
-          }
-        };
-        
-        mediaRecorderRef.current.start();
-        
-        const monitor = () => {
-            if (!analyserRef.current || !mediaRecorderRef.current || !isSessionActive) return;
-            
-            const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-            analyserRef.current.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for(let i = 0; i < dataArray.length; i++) {
-                sum += dataArray[i];
-            }
-            const average = sum / dataArray.length;
-            const dB = 20 * Math.log10(average / 255);
-            
-            if (dB < VAD_THRESHOLD) {
-                if (!silenceTimerRef.current) {
-                    silenceTimerRef.current = setTimeout(() => {
-                        if (mediaRecorderRef.current?.state === 'recording') {
-                            mediaRecorderRef.current.stop();
-                        }
-                    }, VAD_SILENCE_DURATION_MS);
-                }
-            } else {
-                if (silenceTimerRef.current) {
-                    clearTimeout(silenceTimerRef.current);
-                    silenceTimerRef.current = null;
-                }
-            }
-            requestAnimationFrame(monitor);
-        };
-        requestAnimationFrame(monitor);
-
-    } catch (err) {
-        toast({ title: "Microphone Error", description: "Could not access microphone.", variant: "destructive" });
+      e.preventDefault();
     }
-  }, [handleAudioProcessing, isSessionActive, toast]);
+  };
 
-  const stopSession = useCallback(() => {
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    
-    streamRef.current?.getTracks().forEach(track => track.stop());
-    if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current?.stop();
+  const handleMouseMove = (e: MouseEvent) => {
+    if (isDragging && overlayRef.current) {
+      setPosition({
+        x: e.clientX - dragStartPos.current.x,
+        y: e.clientY - dragStartPos.current.y,
+      });
     }
-    audioContextRef.current?.close();
+  };
 
-    mediaRecorderRef.current = null;
-    audioContextRef.current = null;
-    analyserRef.current = null;
-    streamRef.current = null;
-    silenceTimerRef.current = null;
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
 
-    setIsSessionActive(false);
-    setIsListening(false);
-    setTranscript('');
-    setAnswer('');
-    toast({ title: "Session Ended" });
-  }, [toast]);
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    } else {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
 
   return (
-    <div className="container mx-auto max-w-6xl p-4 py-8">
-      <h1 className="mb-2 font-headline text-4xl font-bold">Live Interview Co-pilot</h1>
-      <p className="mb-4 text-muted-foreground">
-        Start a session to enable real-time transcription and answer generation. The agent will listen for a question and automatically provide an answer after a moment of silence.
-      </p>
-
-      <main>
-        <Alert className="mb-6">
-          <Terminal className="h-4 w-4" />
-          <AlertTitle>How it works</AlertTitle>
-          <AlertDescription>
-            Click "Start Session". The agent will listen for speech. When it detects a pause, it will automatically process the audio to generate a transcript and a suggested answer.
-          </AlertDescription>
-        </Alert>
-        
-         <div className="mb-6 text-center">
-            {!isSessionActive ? (
-                 <Button onClick={startSession} disabled={isPending}>
-                    <Mic className="mr-2" /> Start Session
-                 </Button>
-            ) : (
-                <Button onClick={stopSession} variant="destructive" disabled={isPending}>
-                    <StopCircle className="mr-2" /> Stop Session
-                 </Button>
+    <div
+      ref={overlayRef}
+      className="fixed z-50 w-full max-w-md bg-background/80 backdrop-blur-lg rounded-lg shadow-2xl border border-border"
+      style={{ top: position.y, left: position.x }}
+      onMouseDown={handleMouseDown}
+    >
+      <div data-drag-handle className="flex items-center justify-between p-2 border-b cursor-move">
+        <div className="flex items-center gap-2">
+          <Bot className="h-5 w-5 text-accent" />
+          <h3 className="font-semibold">Stealth Mode</h3>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+          <Square className="h-4 w-4" />
+          <span className="sr-only">Close Overlay</span>
+        </Button>
+      </div>
+      <div className="p-4 space-y-4">
+        <div className="flex items-start gap-2 text-sm">
+          <User className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+          <p className="flex-1">
+            {transcription || (
+              <span className="text-muted-foreground italic">
+                {isRecording ? "Listening..." : "Start recording to see transcription."}
+              </span>
             )}
+          </p>
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Interviewer's Question</CardTitle>
-            </CardHeader>
-            <CardContent className="min-h-[20rem] prose prose-sm dark:prose-invert max-w-none">
-              {isSessionActive && (
-                <div className="flex items-center gap-2 text-primary mb-4">
-                  {isListening && !isPending && <AudioLines className="animate-pulse" />}
-                  {isPending && <BrainCircuit className="animate-spin" />}
-                  <span>{isPending ? 'Processing...' : 'Listening...'}</span>
-                </div>
-              )}
-              <p>{transcript || 'Transcript will appear here...'}</p>
-            </CardContent>
-          </Card>
-          <AnswerDisplay answer={answer} isLoading={isPending} />
+        <div className="flex items-start gap-2 text-sm">
+          <Bot className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+            {aiResponse && !isLoading && <p>{aiResponse}</p>}
+            {!aiResponse && !isLoading && <p className="text-muted-foreground italic">AI response will appear here.</p>}
+          </div>
         </div>
-      </main>
+      </div>
     </div>
+  );
+};
+
+
+const ScreenShareDialog = ({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) => {
+  const meetingApps = [
+    { name: 'Zoom', icon: 'https://placehold.co/40x40.png', dataAiHint: 'zoom logo' },
+    { name: 'Microsoft Teams', icon: 'https://placehold.co/40x40.png', dataAiHint: 'teams logo' },
+    { name: 'Google Meet', icon: 'https://placehold.co/40x40.png', dataAiHint: 'google meet logo' },
+    { name: 'Slack', icon: 'https://placehold.co/40x40.png', dataAiHint: 'slack logo' },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Share Your Screen</DialogTitle>
+          <DialogDescription>
+            Select the application you are using for the interview. This helps optimize the transcription.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-4 pt-4">
+          {meetingApps.map(app => (
+            <Button variant="outline" key={app.name} className="h-auto p-4 flex flex-col gap-2 items-center">
+              <img src={app.icon} alt={app.name} className="h-10 w-10 rounded-md" data-ai-hint={app.dataAiHint} />
+              <span>{app.name}</span>
+            </Button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export default function Home() {
+  const [resume, setResume] = useState('');
+  const [jobDescription, setJobDescription] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcription, setTranscription] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+  const [stealthMode, setStealthMode] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    setIsClient(true);
+    
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.shiftKey && event.key.toUpperCase() === 'S') {
+        event.preventDefault();
+        setStealthMode(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  const handleGenerateResponse = async (question: string) => {
+    setIsLoading(true);
+    setAiResponse('');
+    try {
+      const response = await generateInterviewResponse({
+        transcription: question,
+        resume: resume || resumePlaceholder,
+        jobDescription: jobDescription || jobDescriptionPlaceholder,
+      });
+      setAiResponse(response.answer);
+      if (!stealthMode) {
+        setTranscription(question); 
+      }
+    } catch (error) {
+      console.error("Error generating AI response:", error);
+      toast({ variant: "destructive", title: "AI Error", description: "Failed to generate a response." });
+      if (!stealthMode) {
+        setTranscription(question);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleToggleRecording = () => {
+    if (isRecording) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      toast({
+        variant: "destructive",
+        title: "Unsupported Browser",
+        description: "Speech recognition is not supported in this browser.",
+      });
+      return;
+    }
+
+    recognitionRef.current = new SpeechRecognition();
+    const recognition = recognitionRef.current;
+    
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setAiResponse('');
+      setTranscription('');
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      toast({
+        variant: "destructive",
+        title: "Speech Recognition Error",
+        description: event.error === 'not-allowed' ? 'Microphone access was denied.' : event.error,
+      });
+      setIsRecording(false);
+    };
+    
+    let finalTranscriptSinceLastGeneration = '';
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscriptSinceLastGeneration += event.results[i][0].transcript + ' ';
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      
+      const currentTranscription = finalTranscriptSinceLastGeneration + interimTranscript;
+      setTranscription(currentTranscription);
+
+      if (finalTranscriptSinceLastGeneration.trim() && !isLoading) {
+        const toProcess = finalTranscriptSinceLastGeneration.trim();
+        finalTranscriptSinceLastGeneration = ''; 
+        handleGenerateResponse(toProcess);
+      }
+    };
+
+    recognition.start();
+  };
+  
+  if (!isClient) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Skeleton className="h-64 w-full max-w-4xl" />
+      </div>
+    );
+  }
+
+  if (stealthMode) {
+    return (
+      <DraggableStealthOverlay
+        isRecording={isRecording}
+        isLoading={isLoading}
+        transcription={transcription}
+        aiResponse={aiResponse}
+        onClose={() => setStealthMode(false)}
+      />
+    );
+  }
+
+  return (
+    <TooltipProvider>
+      <ScreenShareDialog open={showShareDialog} onOpenChange={setShowShareDialog} />
+      <div className="min-h-screen w-full bg-background text-foreground">
+        <header className="border-b">
+          <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
+            <h1 className="text-2xl font-bold">WhisperAssist</h1>
+            <div className="flex items-center gap-2">
+              <p className="text-sm text-muted-foreground hidden md:block">Your AI Interview Co-pilot</p>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={() => setStealthMode(true)}>
+                    Stealth Mode
+                    <span className="ml-2 text-xs bg-muted text-muted-foreground rounded-sm px-1.5 py-0.5">Shift+S</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Open a draggable, minimal overlay for transcription.</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        </header>
+
+        <main className="container mx-auto p-4 md:p-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            
+            <div className="space-y-8">
+              <Card className="shadow-lg">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    Setup
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Info className="h-4 w-4 text-muted-foreground" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Provide your resume and the job description for tailored AI responses. <br /> You can also use the default placeholder text.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </CardTitle>
+                  <CardDescription>Provide your documents and start the interview when ready.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid w-full gap-1.5">
+                    <Label htmlFor="resume">Your Resume</Label>
+                    <Textarea 
+                      placeholder={resumePlaceholder} 
+                      id="resume" 
+                      rows={12}
+                      value={resume}
+                      onChange={(e) => setResume(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid w-full gap-1.5">
+                    <Label htmlFor="job-description">Job Description</Label>
+                    <Textarea 
+                      placeholder={jobDescriptionPlaceholder} 
+                      id="job-description" 
+                      rows={12}
+                      value={jobDescription}
+                      onChange={(e) => setJobDescription(e.target.value)}
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter className="flex-col sm:flex-row gap-2">
+                   <Button onClick={() => setShowShareDialog(true)} size="lg" variant="outline" className="w-full sm:w-auto">
+                    <Video className="mr-2 h-5 w-5" />
+                    Share Screen
+                  </Button>
+                  <Button onClick={handleToggleRecording} size="lg" className="w-full">
+                    {isRecording ? <Square className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
+                    {isRecording ? 'Stop Interview' : 'Start Interview'}
+                  </Button>
+                </CardFooter>
+              </Card>
+            </div>
+
+            <div className="space-y-8 sticky top-8">
+              <Card className="min-h-[200px]">
+                <CardHeader>
+                  <CardTitle>Live Transcription</CardTitle>
+                  <CardDescription>Your interviewer's questions will appear here in real-time.</CardDescription>
+                </CardHeader>
+                <CardContent className="text-lg font-medium flex items-center gap-4">
+                  <User className="h-6 w-6 text-primary flex-shrink-0" />
+                  <p>
+                    {transcription || (
+                      <span className="text-muted-foreground italic">
+                        {isRecording ? "Listening..." : "Press 'Start Interview' to begin."}
+                      </span>
+                    )}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <div className="relative">
+                <Card className="min-h-[300px] shadow-2xl bg-card/80 backdrop-blur-sm border-2 border-accent transition-all duration-300 animate-in fade-in-0 zoom-in-95">
+                  <CardHeader>
+                    <CardTitle>AI Co-pilot Response</CardTitle>
+                    <CardDescription>The AI's suggested response will appear here.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-lg flex items-start gap-4">
+                    <Bot className="h-6 w-6 text-accent flex-shrink-0 mt-1" />
+                    <div className="w-full">
+                      {isLoading && (
+                        <div className="flex items-center space-x-2">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                          <p className="text-muted-foreground italic">Generating response...</p>
+                        </div>
+                      )}
+                      {aiResponse && !isLoading && (
+                        <div key={aiResponse} className="prose prose-p:text-foreground dark:prose-invert animate-in fade-in-50 duration-500">
+                           <p>{aiResponse}</p>
+                        </div>
+                      )}
+                      {!aiResponse && !isLoading && (
+                        <p className="text-muted-foreground italic">
+                          {isRecording ? "Waiting for a question..." : "Responses will be shown here."}
+                        </p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+
+          </div>
+        </main>
+      </div>
+    </TooltipProvider>
   );
 }
