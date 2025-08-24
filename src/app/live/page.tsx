@@ -2,16 +2,22 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { generateInterviewResponse } from '@/ai/flows/generate-interview-response';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Mic, Square, Bot, User, Loader2, Info, Video } from 'lucide-react';
+import { Mic, Square, Bot, User, Loader2, Video } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+
+interface Profile {
+  id: string;
+  name: string;
+  resume: string;
+  jobDescription: string;
+}
 
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;
@@ -191,7 +197,8 @@ const ScreenShareDialog = ({ open, onOpenChange }: { open: boolean, onOpenChange
   )
 }
 
-export default function Home() {
+function LivePageContent() {
+  const searchParams = useSearchParams();
   const [resume, setResume] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -208,6 +215,31 @@ export default function Home() {
   useEffect(() => {
     setIsClient(true);
     
+    const profileId = searchParams.get('profile');
+    if (profileId) {
+      try {
+        const savedProfiles = localStorage.getItem('interviewProfiles');
+        if (savedProfiles) {
+          const profiles: Profile[] = JSON.parse(savedProfiles);
+          const profile = profiles.find(p => p.id === profileId);
+          if (profile) {
+            setResume(profile.resume);
+            setJobDescription(profile.jobDescription);
+            toast({
+              title: `Profile "${profile.name}" Loaded`,
+              description: "You're all set for the live interview!",
+            });
+          }
+        }
+      } catch (error) {
+        toast({
+          title: 'Error loading profile',
+          description: 'Using placeholder data.',
+          variant: 'destructive',
+        });
+      }
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.shiftKey && event.key.toUpperCase() === 'S') {
         event.preventDefault();
@@ -223,7 +255,7 @@ export default function Home() {
       }
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [searchParams, toast]);
 
   const handleGenerateResponse = async (question: string) => {
     setIsLoading(true);
@@ -363,43 +395,16 @@ export default function Home() {
         <main className="container mx-auto p-4 md:p-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
             
-            <div className="space-y-8">
-              <Card className="shadow-lg">
+            <div className="space-y-4">
+              <Card>
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Setup
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Info className="h-4 w-4 text-muted-foreground" />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Provide your resume and the job description for tailored AI responses. <br /> You can also use the default placeholder text.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </CardTitle>
-                  <CardDescription>Provide your documents and start the interview when ready.</CardDescription>
+                  <CardTitle>Controls</CardTitle>
+                  <CardDescription>Start the interview when you're ready.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid w-full gap-1.5">
-                    <Label htmlFor="resume">Your Resume</Label>
-                    <Textarea 
-                      placeholder={resumePlaceholder} 
-                      id="resume" 
-                      rows={12}
-                      value={resume}
-                      onChange={(e) => setResume(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid w-full gap-1.5">
-                    <Label htmlFor="job-description">Job Description</Label>
-                    <Textarea 
-                      placeholder={jobDescriptionPlaceholder} 
-                      id="job-description" 
-                      rows={12}
-                      value={jobDescription}
-                      onChange={(e) => setJobDescription(e.target.value)}
-                    />
-                  </div>
+                <CardContent>
+                   <p className="text-sm text-muted-foreground mb-4">
+                    The resume and job description from your selected profile are loaded and ready.
+                  </p>
                 </CardContent>
                 <CardFooter className="flex-col sm:flex-row gap-2">
                    <Button onClick={() => setShowShareDialog(true)} size="lg" variant="outline" className="w-full sm:w-auto">
@@ -467,5 +472,21 @@ export default function Home() {
         </main>
       </div>
     </TooltipProvider>
+  );
+}
+
+// Next.js requires a default export for pages.
+// We wrap the main content in a Suspense boundary to handle the useSearchParams hook.
+import { Suspense } from 'react';
+
+export default function LivePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Skeleton className="h-64 w-full max-w-4xl" />
+      </div>
+    }>
+      <LivePageContent />
+    </Suspense>
   );
 }
