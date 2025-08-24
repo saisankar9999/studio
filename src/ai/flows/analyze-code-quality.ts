@@ -55,9 +55,13 @@ const analyzeCodeQualityPrompt = ai.definePrompt({
   tools: [analyzeCodeQualityTool],
   prompt: `You are an expert software engineer reviewing code submitted during a live interview.
 Analyze the following code for quality, efficiency, and correctness. Provide a quality score (0-100), suggestions for improvement, and an analysis of potential errors.
-\nCode:
-```{{{language}}}\n{{{code}}}
-```\n\nUse the analyzeCode tool to perform the analysis.
+
+Code:
+\`\`\`{{{language}}}
+{{{code}}}
+\`\`\`
+
+Use the analyzeCode tool to perform the analysis.
 `,
 });
 
