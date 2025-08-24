@@ -1,42 +1,25 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { generateInterviewResponse } from '@/ai/flows/generate-interview-response';
+import { transcribeAudio } from '@/ai/flows/transcribe-audio';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mic, Square, Bot, User, Loader2, Video } from 'lucide-react';
+import { Mic, Square, Bot, User, Loader2, Video, ScreenShare, MonitorStop } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+
 
 interface Profile {
   id: string;
   name: string;
   resume: string;
   jobDescription: string;
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onstart: () => void;
-  onend: () => void;
-  onerror: (event: any) => void;
-  onresult: (event: any) => void;
-  start: () => void;
-  stop: () => void;
-  new(): SpeechRecognition;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: SpeechRecognition;
-    webkitSpeechRecognition: SpeechRecognition;
-  }
 }
 
 const resumePlaceholder = `John Doe
@@ -166,50 +149,22 @@ const DraggableStealthOverlay = ({
   );
 };
 
-
-const ScreenShareDialog = ({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) => {
-  const meetingApps = [
-    { name: 'Zoom', icon: 'https://placehold.co/40x40.png', dataAiHint: 'zoom logo' },
-    { name: 'Microsoft Teams', icon: 'https://placehold.co/40x40.png', dataAiHint: 'teams logo' },
-    { name: 'Google Meet', icon: 'https://placehold.co/40x40.png', dataAiHint: 'google meet logo' },
-    { name: 'Slack', icon: 'https://placehold.co/40x40.png', dataAiHint: 'slack logo' },
-  ];
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Share Your Screen</DialogTitle>
-          <DialogDescription>
-            Select the application you are using for the interview. This helps optimize the transcription.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-2 gap-4 pt-4">
-          {meetingApps.map(app => (
-            <Button variant="outline" key={app.name} className="h-auto p-4 flex flex-col gap-2 items-center">
-              <img src={app.icon} alt={app.name} className="h-10 w-10 rounded-md" data-ai-hint={app.dataAiHint} />
-              <span>{app.name}</span>
-            </Button>
-          ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 function LivePageContent() {
   const searchParams = useSearchParams();
   const [resume, setResume] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingSource, setRecordingSource] = useState<'mic' | 'screen' | null>(null);
   const [transcription, setTranscription] = useState('');
   const [aiResponse, setAiResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [stealthMode, setStealthMode] = useState(false);
-  const [showShareDialog, setShowShareDialog] = useState(false);
+  
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -250,103 +205,102 @@ function LivePageContent() {
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
+      stopRecording();
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [searchParams, toast]);
 
-  const handleGenerateResponse = async (question: string) => {
+  const processAudio = async (audioBlob: Blob) => {
     setIsLoading(true);
     setAiResponse('');
-    try {
-      const response = await generateInterviewResponse({
-        transcription: question,
-        resume: resume || resumePlaceholder,
-        jobDescription: jobDescription || jobDescriptionPlaceholder,
-      });
-      setAiResponse(response.answer);
-      if (!stealthMode) {
-        setTranscription(question); 
+    setTranscription('');
+
+    const reader = new FileReader();
+    reader.readAsDataURL(audioBlob);
+    reader.onloadend = async () => {
+      const audioDataUri = reader.result as string;
+      try {
+        const { text: transcribedQuestion } = await transcribeAudio({ audioDataUri });
+        if (!transcribedQuestion) throw new Error("Transcription failed.");
+        
+        setTranscription(transcribedQuestion);
+
+        const response = await generateInterviewResponse({
+          transcription: transcribedQuestion,
+          resume: resume || resumePlaceholder,
+          jobDescription: jobDescription || jobDescriptionPlaceholder,
+        });
+        setAiResponse(response.answer);
+      } catch (error) {
+        console.error("Error processing audio:", error);
+        toast({ variant: "destructive", title: "AI Error", description: "Failed to process audio." });
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error("Error generating AI response:", error);
-      toast({ variant: "destructive", title: "AI Error", description: "Failed to generate a response." });
-      if (!stealthMode) {
-        setTranscription(question);
-      }
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const handleToggleRecording = () => {
+  const startRecording = useCallback(async (source: 'mic' | 'screen') => {
     if (isRecording) {
-      recognitionRef.current?.stop();
+      toast({ title: "Already recording", description: "Please stop the current recording first."});
       return;
     }
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
+    try {
+      let stream: MediaStream | null = null;
+      if (source === 'mic') {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      } else {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+      }
+
+      if (stream) {
+        mediaStreamRef.current = stream;
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        audioChunksRef.current = [];
+
+        mediaRecorderRef.current.ondataavailable = (event) => {
+          audioChunksRef.current.push(event.data);
+        };
+        
+        mediaRecorderRef.current.onstop = () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          if(audioBlob.size > 0) {
+            processAudio(audioBlob);
+          }
+          // Clean up stream
+          mediaStreamRef.current?.getTracks().forEach(track => track.stop());
+          mediaStreamRef.current = null;
+        };
+        
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+        setRecordingSource(source);
+        setAiResponse('');
+        setTranscription('');
+      }
+
+    } catch (err) {
+      console.error(`Error starting ${source} recording:`, err);
       toast({
         variant: "destructive",
-        title: "Unsupported Browser",
-        description: "Speech recognition is not supported in this browser.",
+        title: "Permission Denied",
+        description: `Could not start ${source} recording. Please grant the necessary permissions.`,
       });
-      return;
     }
+  }, [isRecording, toast]);
 
-    recognitionRef.current = new SpeechRecognition();
-    const recognition = recognitionRef.current;
-    
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
 
-    recognition.onstart = () => {
-      setIsRecording(true);
-      setAiResponse('');
-      setTranscription('');
-    };
-
-    recognition.onend = () => {
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
       setIsRecording(false);
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      toast({
-        variant: "destructive",
-        title: "Speech Recognition Error",
-        description: event.error === 'not-allowed' ? 'Microphone access was denied.' : event.error,
-      });
-      setIsRecording(false);
-    };
-    
-    let finalTranscriptSinceLastGeneration = '';
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscriptSinceLastGeneration += event.results[i][0].transcript + ' ';
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-      
-      const currentTranscription = finalTranscriptSinceLastGeneration + interimTranscript;
-      setTranscription(currentTranscription);
-
-      if (finalTranscriptSinceLastGeneration.trim() && !isLoading) {
-        const toProcess = finalTranscriptSinceLastGeneration.trim();
-        finalTranscriptSinceLastGeneration = ''; 
-        handleGenerateResponse(toProcess);
-      }
-    };
-
-    recognition.start();
-  };
+      setRecordingSource(null);
+    }
+  }, [isRecording]);
   
   if (!isClient) {
     return (
@@ -370,7 +324,6 @@ function LivePageContent() {
 
   return (
     <TooltipProvider>
-      <ScreenShareDialog open={showShareDialog} onOpenChange={setShowShareDialog} />
       <div className="min-h-screen w-full bg-background text-foreground">
         <header className="border-b">
           <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
@@ -399,22 +352,41 @@ function LivePageContent() {
               <Card>
                 <CardHeader>
                   <CardTitle>Controls</CardTitle>
-                  <CardDescription>Start the interview when you're ready.</CardDescription>
+                  <CardDescription>Start recording from your mic or screen when ready.</CardDescription>
                 </CardHeader>
                 <CardContent>
                    <p className="text-sm text-muted-foreground mb-4">
-                    The resume and job description from your selected profile are loaded and ready.
+                    The resume and job description from your selected profile are loaded.
                   </p>
+                  {isRecording && (
+                    <Alert variant={recordingSource === 'mic' ? 'default' : 'destructive'}>
+                      <AlertTitle>
+                        {recordingSource === 'mic' ? 'Recording from Microphone' : 'Recording from Screen'}
+                      </AlertTitle>
+                      <AlertDescription>
+                        Click "Stop Recording" to process the audio.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </CardContent>
                 <CardFooter className="flex-col sm:flex-row gap-2">
-                   <Button onClick={() => setShowShareDialog(true)} size="lg" variant="outline" className="w-full sm:w-auto">
-                    <Video className="mr-2 h-5 w-5" />
-                    Share Screen
-                  </Button>
-                  <Button onClick={handleToggleRecording} size="lg" className="w-full">
-                    {isRecording ? <Square className="mr-2 h-5 w-5" /> : <Mic className="mr-2 h-5 w-5" />}
-                    {isRecording ? 'Stop Interview' : 'Start Interview'}
-                  </Button>
+                   {!isRecording ? (
+                     <>
+                      <Button onClick={() => startRecording('mic')} size="lg" className="w-full sm:w-auto">
+                        <Mic className="mr-2 h-5 w-5" />
+                        Record Mic
+                      </Button>
+                       <Button onClick={() => startRecording('screen')} size="lg" variant="outline" className="w-full sm:w-auto">
+                        <ScreenShare className="mr-2 h-5 w-5" />
+                        Share Screen
+                      </Button>
+                     </>
+                   ) : (
+                     <Button onClick={stopRecording} size="lg" variant="destructive" className="w-full">
+                        <Square className="mr-2 h-5 w-5" />
+                        Stop Recording
+                      </Button>
+                   )}
                 </CardFooter>
               </Card>
             </div>
@@ -423,14 +395,14 @@ function LivePageContent() {
               <Card className="min-h-[200px]">
                 <CardHeader>
                   <CardTitle>Live Transcription</CardTitle>
-                  <CardDescription>Your interviewer's questions will appear here in real-time.</CardDescription>
+                  <CardDescription>Your interviewer's questions will appear here.</CardDescription>
                 </CardHeader>
                 <CardContent className="text-lg font-medium flex items-center gap-4">
                   <User className="h-6 w-6 text-primary flex-shrink-0" />
                   <p>
                     {transcription || (
                       <span className="text-muted-foreground italic">
-                        {isRecording ? "Listening..." : "Press 'Start Interview' to begin."}
+                        {isRecording ? "Listening..." : "Start a recording to begin."}
                       </span>
                     )}
                   </p>
@@ -459,7 +431,7 @@ function LivePageContent() {
                       )}
                       {!aiResponse && !isLoading && (
                         <p className="text-muted-foreground italic">
-                          {isRecording ? "Waiting for a question..." : "Responses will be shown here."}
+                           Responses will be shown here.
                         </p>
                       )}
                     </div>
@@ -477,8 +449,6 @@ function LivePageContent() {
 
 // Next.js requires a default export for pages.
 // We wrap the main content in a Suspense boundary to handle the useSearchParams hook.
-import { Suspense } from 'react';
-
 export default function LivePage() {
   return (
     <Suspense fallback={
