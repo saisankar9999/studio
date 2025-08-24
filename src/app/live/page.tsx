@@ -23,10 +23,14 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import type { AnalyzeCodeQualityOutput } from '@/ai/flows/analyze-code-quality';
-import { analyzeCodeAction, answerQuestionAction, analyzeScreenAction } from './actions';
-import { AlertCircle, Terminal, Mic, Video, StopCircle, Scan } from 'lucide-react';
+import {
+  analyzeCodeAction,
+  answerQuestionAction,
+  analyzeScreenAction,
+} from './actions';
+import { AlertCircle, Terminal, Video } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { StealthModeOverlay } from '@/components/common/StealthModeOverlay';
+import { StealthModeOverlayV2 } from '@/components/common/StealthModeOverlayV2';
 import type { AnswerQuestionOutput } from '@/ai/flows/answer-question';
 import type { AnalyzeScreenOutput } from '@/ai/flows/analyze-screen';
 
@@ -40,14 +44,12 @@ export default function LivePage() {
 
   // Stealth Mode State
   const [stealthMode, setStealthMode] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const [stealthContent, setStealthContent] = useState<AnswerQuestionOutput | AnalyzeScreenOutput | null>(null);
-  const [stealthTitle, setStealthTitle] = useState<string>('');
-  
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const [stealthContent, setStealthContent] = useState<
+    AnswerQuestionOutput | AnalyzeScreenOutput | null
+  >(null);
+  const [stealthTitle, setStealthTitle] = useState<string>('Co-pilot');
+
   const handleAnalyzeCode = () => {
     if (!code.trim()) {
       toast({
@@ -76,74 +78,71 @@ export default function LivePage() {
       }
     });
   };
-  
-  const getPermissions = async () => {
+
+  const handleLaunchStealthMode = async () => {
     try {
-      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      setMediaStream(audioStream);
-      toast({ title: 'Microphone access granted.' });
-      return audioStream;
-    } catch (error) {
-      console.error("Error accessing microphone:", error);
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false, // Audio capture via getDisplayMedia is less reliable for this use case
+      });
+      screenStreamRef.current = stream;
+      setStealthMode(true);
       toast({
-        title: 'Microphone Access Denied',
-        description: 'Please enable microphone permissions in your browser.',
+        title: 'Stealth Mode Activated',
+        description: 'The overlay is now active. Share your screen in the interview.',
+      });
+
+      // Listen for when the user stops sharing
+      stream.getVideoTracks()[0].onended = () => {
+        setStealthMode(false);
+        screenStreamRef.current = null;
+        toast({
+          title: 'Stealth Mode Deactivated',
+          description: 'Screen sharing has ended.',
+        });
+      };
+    } catch (err) {
+      console.error('Error starting screen share:', err);
+      toast({
+        title: 'Screen Share Canceled or Failed',
+        description: 'Could not start screen sharing to launch Stealth Mode.',
         variant: 'destructive',
       });
-      return null;
     }
   };
+  
+  const handleStopStealthMode = () => {
+      screenStreamRef.current?.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+      setStealthMode(false);
+  }
 
-  const startRecording = async () => {
-    let stream = mediaStream;
-    if (!stream) {
-      stream = await getPermissions();
-    }
-    
-    if (stream) {
-      setIsRecording(true);
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        audioChunksRef.current.push(event.data);
-      };
-      mediaRecorderRef.current.start();
-      toast({ title: 'Recording started...' });
-    }
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        audioChunksRef.current = [];
-        handleAnswerQuestion(audioBlob);
-      };
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      toast({ title: 'Recording stopped. Analyzing...' });
-    }
-  };
-
-  const handleAnswerQuestion = (audioBlob: Blob) => {
+  const onAnswerQuestion = (audioBlob: Blob) => {
     startTransition(async () => {
       setStealthContent(null);
       setStealthTitle('Answering Question...');
-      
+
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
       reader.onloadend = async () => {
         const base64Audio = reader.result as string;
-        // You'll need resume and job description. For now, let's pull from local storage if available.
-        const interviewData = JSON.parse(localStorage.getItem('interviewData') || '{}');
-        
+        const interviewData = JSON.parse(
+          localStorage.getItem('interviewData') || '{}'
+        );
+
         const result = await answerQuestionAction({
           audioDataUri: base64Audio,
           resume: interviewData.resume || 'No resume provided.',
-          jobDescription: interviewData.jobDescription || 'No job description provided.',
+          jobDescription:
+            interviewData.jobDescription || 'No job description provided.',
         });
-        
-        if(result.error) {
-          toast({ title: 'Error answering question', description: result.error, variant: 'destructive' });
+
+        if (result.error) {
+          toast({
+            title: 'Error answering question',
+            description: result.error,
+            variant: 'destructive',
+          });
           setStealthTitle('Error');
         } else {
           setStealthContent(result.answer);
@@ -153,85 +152,104 @@ export default function LivePage() {
     });
   };
 
-  const handleAnalyzeScreen = async () => {
+  const onAnalyzeScreen = async () => {
+    if (!screenStreamRef.current) {
+      toast({
+        title: 'Screen Share Not Active',
+        description: 'Please start screen sharing to analyze.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      setScreenStream(stream);
+      const videoTrack = screenStreamRef.current.getVideoTracks()[0];
+      const imageCapture = new (window as any).ImageCapture(videoTrack);
+      const bitmap = await imageCapture.grabFrame();
 
-      // Give user a moment to switch to the right window
-      setTimeout(async () => {
-        const videoTrack = stream.getVideoTracks()[0];
-        const imageCapture = new (window as any).ImageCapture(videoTrack);
-        const bitmap = await imageCapture.grabFrame();
-        
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        const context = canvas.getContext('2d');
-        context?.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height);
-        
-        const screenshotDataUri = canvas.toDataURL('image/png');
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const context = canvas.getContext('2d');
+      context?.drawImage(bitmap, 0, 0, bitmap.width, bitmap.height);
+      const screenshotDataUri = canvas.toDataURL('image/png');
+      
+      toast({ title: 'Screen captured! Analyzing...' });
 
-        // Stop sharing screen immediately
-        stream.getTracks().forEach(track => track.stop());
-        setScreenStream(null);
-        
-        toast({ title: "Screen captured! Analyzing..." });
-        
-        startTransition(async () => {
-          setStealthContent(null);
-          setStealthTitle('Analyzing Screen...');
-          const result = await analyzeScreenAction({ screenshotDataUri });
-          if(result.error) {
-            toast({ title: 'Error analyzing screen', description: result.error, variant: 'destructive' });
-            setStealthTitle('Error');
-          } else {
-            setStealthContent(result.analysis);
-            setStealthTitle('Screen Analysis');
-          }
-        });
-
-      }, 500);
-
+      startTransition(async () => {
+        setStealthContent(null);
+        setStealthTitle('Analyzing Screen...');
+        const result = await analyzeScreenAction({ screenshotDataUri });
+        if (result.error) {
+          toast({
+            title: 'Error analyzing screen',
+            description: result.error,
+            variant: 'destructive',
+          });
+          setStealthTitle('Error');
+        } else {
+          setStealthContent(result.analysis);
+          setStealthTitle('Screen Analysis');
+        }
+      });
     } catch (error) {
-      console.error("Error capturing screen:", error);
-      toast({ title: 'Screen Capture Failed', description: 'Could not capture the screen.', variant: 'destructive' });
+      console.error('Error capturing screen:', error);
+      toast({
+        title: 'Screen Capture Failed',
+        description: 'Could not capture the screen.',
+        variant: 'destructive',
+      });
     }
   };
   
   useEffect(() => {
-    return () => {
-      mediaStream?.getTracks().forEach(track => track.stop());
-      screenStream?.getTracks().forEach(track => track.stop());
-    }
-  }, [mediaStream, screenStream]);
+      return () => {
+          screenStreamRef.current?.getTracks().forEach(track => track.stop());
+      }
+  }, [])
 
   return (
     <div className="container mx-auto max-w-6xl p-4 py-8">
       {stealthMode && (
-         <StealthModeOverlay 
-           isOpen={stealthMode} 
-           onClose={() => setStealthMode(false)}
-           title={stealthTitle}
-           isLoading={isPending}
-         >
-           {stealthContent && 'summarizedQuestion' in stealthContent && (
-             <div className="space-y-4">
-               <h4 className="font-semibold">Summarized Question:</h4>
-               <p className="text-muted-foreground">{stealthContent.summarizedQuestion}</p>
-               <h4 className="font-semibold">Suggested Answer:</h4>
-               <div className="prose prose-sm dark:prose-invert" dangerouslySetInnerHTML={{ __html: stealthContent.answer.replace(/\n/g, '<br />') }} />
-             </div>
-           )}
-           {stealthContent && 'analysis' in stealthContent && (
-             <div className="space-y-4">
-               <h4 className="font-semibold">Analysis:</h4>
-               <p className="text-muted-foreground">{stealthContent.analysis}</p>
-                <h4 className="font-semibold">Suggestion:</h4>
-               <div className="prose prose-sm dark:prose-invert" dangerouslySetInnerHTML={{ __html: stealthContent.suggestion.replace(/\n/g, '<br />') }} />
-             </div>
-           )}
-         </StealthModeOverlay>
+        <StealthModeOverlayV2
+          isOpen={stealthMode}
+          onClose={handleStopStealthMode}
+          title={stealthTitle}
+          isLoading={isPending}
+          onAnswerQuestion={onAnswerQuestion}
+          onAnalyzeScreen={onAnalyzeScreen}
+        >
+          {stealthContent && 'summarizedQuestion' in stealthContent && (
+            <div className="space-y-4">
+              <h4 className="font-semibold">Summarized Question:</h4>
+              <p className="text-muted-foreground">
+                {stealthContent.summarizedQuestion}
+              </p>
+              <h4 className="font-semibold">Suggested Answer:</h4>
+              <div
+                className="prose prose-sm dark:prose-invert"
+                dangerouslySetInnerHTML={{
+                  __html: stealthContent.answer.replace(/\n/g, '<br />'),
+                }}
+              />
+            </div>
+          )}
+          {stealthContent && 'analysis' in stealthContent && (
+            <div className="space-y-4">
+              <h4 className="font-semibold">Analysis:</h4>
+              <p className="text-muted-foreground">
+                {stealthContent.analysis}
+              </p>
+              <h4 className="font-semibold">Suggestion:</h4>
+              <div
+                className="prose prose-sm dark:prose-invert"
+                dangerouslySetInnerHTML={{
+                  __html: stealthContent.suggestion.replace(/\n/g, '<br />'),
+                }}
+              />
+            </div>
+          )}
+        </StealthModeOverlayV2>
       )}
 
       <h1 className="mb-2 font-headline text-4xl font-bold">
@@ -241,15 +259,57 @@ export default function LivePage() {
         Discreet tools to help you shine during your live interview.
       </p>
 
-      <Tabs defaultValue="code-analyzer" className="w-full">
+      <Tabs defaultValue="stealth-mode" className="w-full">
         <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
-          <TabsTrigger value="code-analyzer">
-            <Terminal className="mr-2 h-4 w-4" /> Code Analyzer
-          </TabsTrigger>
           <TabsTrigger value="stealth-mode">
             <Video className="mr-2 h-4 w-4" /> Stealth Mode
           </TabsTrigger>
+          <TabsTrigger value="code-analyzer">
+            <Terminal className="mr-2 h-4 w-4" /> Code Analyzer
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="stealth-mode">
+          <Card>
+            <CardHeader>
+              <CardTitle>Stealth Mode</CardTitle>
+              <CardDescription>
+                Launch a discreet overlay for real-time interview assistance.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>How to Use Stealth Mode</AlertTitle>
+                <AlertDescription>
+                  Click "Launch Stealth Mode" below. When prompted by your
+                  browser, choose to share your **Entire Screen**. This is
+                  crucial. The overlay will appear on your screen but will be
+                  **invisible** to others in your video call.
+                </AlertDescription>
+              </Alert>
+
+              {!stealthMode ? (
+                <Button
+                  onClick={handleLaunchStealthMode}
+                  disabled={isPending}
+                  className="w-full"
+                >
+                  Launch Stealth Mode
+                </Button>
+              ) : (
+                <Alert variant="default">
+                  <AlertTitle>Stealth Mode is Active</AlertTitle>
+                  <AlertDescription>
+                    The overlay is now active. Use the controls within it. You can
+                    close this message.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="code-analyzer">
           <Card>
             <CardHeader>
@@ -300,9 +360,7 @@ export default function LivePage() {
                 {isPending && !stealthMode && (
                   <div className="flex flex-1 flex-col items-center justify-center space-y-4 rounded-lg border-2 border-dashed bg-muted/50">
                     <LoadingSpinner className="h-8 w-8 text-primary" />
-                    <p className="text-muted-foreground">
-                      Analyzing...
-                    </p>
+                    <p className="text-muted-foreground">Analyzing...</p>
                   </div>
                 )}
                 {!isPending && !analysisResult && (
@@ -318,7 +376,15 @@ export default function LivePage() {
                       <CardHeader>
                         <CardTitle className="flex items-center justify-between text-lg">
                           <span>Quality Score</span>
-                          <Badge variant={analysisResult.qualityScore > 80 ? 'default' : analysisResult.qualityScore > 60 ? 'secondary' : 'destructive'}>
+                          <Badge
+                            variant={
+                              analysisResult.qualityScore > 80
+                                ? 'default'
+                                : analysisResult.qualityScore > 60
+                                ? 'secondary'
+                                : 'destructive'
+                            }
+                          >
                             {analysisResult.qualityScore} / 100
                           </Badge>
                         </CardTitle>
@@ -363,60 +429,6 @@ export default function LivePage() {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="stealth-mode">
-          <Card>
-            <CardHeader>
-              <CardTitle>Stealth Mode</CardTitle>
-              <CardDescription>
-                Launch a discreet overlay for real-time interview assistance.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>How to Use Stealth Mode</AlertTitle>
-                  <AlertDescription>
-                    When your interview starts, share your **entire screen**, not just the browser window. Then, activate Stealth Mode. You can drag the overlay to position it conveniently. The overlay will **not** be visible to others.
-                  </AlertDescription>
-                </Alert>
-
-                {!stealthMode ? (
-                  <Button onClick={() => setStealthMode(true)} className="w-full">Launch Stealth Mode</Button>
-                ): (
-                   <Alert variant="default">
-                      <AlertTitle>Stealth Mode is Active</AlertTitle>
-                      <AlertDescription>
-                        The overlay is now active. Use the controls within the overlay. You can close this message.
-                      </AlertDescription>
-                   </Alert>
-                )}
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Question Answering</Label>
-                    <p className="text-sm text-muted-foreground">Record the interviewer's question to get a generated answer.</p>
-                     {!isRecording ? (
-                      <Button onClick={startRecording} disabled={!stealthMode || isPending} className="w-full">
-                        <Mic className="mr-2" /> Start Recording
-                      </Button>
-                    ) : (
-                      <Button onClick={stopRecording} disabled={!stealthMode || isPending} className="w-full" variant="destructive">
-                        <StopCircle className="mr-2" /> Stop Recording
-                      </Button>
-                    )}
-                  </div>
-                   <div className="space-y-2">
-                    <Label>Screen Analysis</Label>
-                    <p className="text-sm text-muted-foreground">Capture your screen to analyze code or text from the interview.</p>
-                    <Button onClick={handleAnalyzeScreen} disabled={!stealthMode || isPending} className="w-full">
-                      <Scan className="mr-2" /> Analyze Screen
-                    </Button>
-                  </div>
-                </div>
-
             </CardContent>
           </Card>
         </TabsContent>
