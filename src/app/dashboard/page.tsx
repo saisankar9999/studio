@@ -116,6 +116,10 @@ export default function DashboardPage() {
   
   const selectedProfile = profiles.find(p => p.id === selectedProfileId);
   
+  const prepRoomLink = selectedProfile
+    ? `/prep-room?profile=${selectedProfileId}`
+    : '/prep-room';
+    
   const practiceLink = selectedProfile 
     ? `/practice?profile=${selectedProfileId}` 
     : '/practice';
@@ -201,12 +205,12 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="flex-1">
               <p className="text-sm text-muted-foreground">
-                Upload your resume and a job description to get a detailed analysis. Chat with an AI assistant to practice questions, refine answers, and build a strategy. Your prep session trains the AI for the live co-pilot.
+                Select a profile, then enter the prep room to get a detailed analysis. Chat with an AI assistant to practice questions, refine answers, and build a strategy. Your prep session trains the AI for the live co-pilot.
               </p>
           </CardContent>
           <CardFooter>
-            <Button asChild className="w-full" variant="secondary">
-              <Link href="/prep-room">
+            <Button asChild className="w-full" variant="secondary" disabled={!selectedProfile}>
+              <Link href={prepRoomLink}>
                 Enter Prep Room <ArrowRight />
               </Link>
             </Button>

@@ -2,38 +2,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generate } from 'genkit/ai';
 import { geminiPro } from 'genkitx/googleai';
-import mammoth from 'mammoth';
-import pdf from 'pdf-parse';
-
-async function extractTextFromFile(file: File): Promise<string> {
-  const buffer = Buffer.from(await file.arrayBuffer());
-  if (file.type === 'application/pdf') {
-    const data = await pdf(buffer);
-    return data.text;
-  } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    const { value } = await mammoth.extractRawText({ buffer });
-    return value;
-  } else if (file.type === 'text/plain') {
-    return buffer.toString('utf-8');
-  } else {
-    throw new Error(`Unsupported file type: ${file.type}`);
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const resumeFile = formData.get('resume') as File | null;
-    const jdFile = formData.get('jd') as File | null;
+    const { resumeText, jdText } = await request.json();
 
-    if (!resumeFile || !jdFile) {
-      return NextResponse.json({ error: 'Resume and job description files are required' }, { status: 400 });
+    if (!resumeText || !jdText) {
+      return NextResponse.json({ error: 'Resume and job description text are required' }, { status: 400 });
     }
-
-    const [resumeText, jdText] = await Promise.all([
-      extractTextFromFile(resumeFile),
-      extractTextFromFile(jdFile),
-    ]);
 
     const analysisResponse = await generate({
       model: geminiPro,

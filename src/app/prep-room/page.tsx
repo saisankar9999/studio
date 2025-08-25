@@ -1,50 +1,87 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { Paperclip, FileText, User, Bot, UploadCloud, BrainCircuit, MessageSquare, Send } from 'lucide-react';
 
-export default function PrepRoom() {
+interface Profile {
+  id: string;
+  name: string;
+  resume: string;
+  jobDescription: string;
+}
+
+function PrepRoomContent() {
   const { toast } = useToast();
-  const [resume, setResume] = useState<File | null>(null);
-  const [jd, setJd] = useState<File | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [analysis, setAnalysis] = useState<string>('');
   const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [preparationProgress, setPreparationProgress] = useState(0);
-  const [preparationStatus, setPreparationStatus] = useState('Upload documents to begin');
+  const [preparationStatus, setPreparationStatus] = useState('Select a profile from the dashboard to begin.');
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom of chat
+  useEffect(() => {
+    const profileId = searchParams.get('profile');
+    if (!profileId) {
+      toast({
+        title: "No Profile Selected",
+        description: "Please go back to the dashboard and select a profile.",
+        variant: "destructive"
+      });
+      router.push('/dashboard');
+      return;
+    }
+
+    try {
+      const savedProfiles = localStorage.getItem('interviewProfiles');
+      if (savedProfiles) {
+        const profiles: Profile[] = JSON.parse(savedProfiles);
+        const selectedProfile = profiles.find(p => p.id === profileId);
+        if (selectedProfile) {
+          setProfile(selectedProfile);
+          setPreparationStatus(`Profile "${selectedProfile.name}" loaded. Click "Analyze" to start.`);
+          setPreparationProgress(5);
+        } else {
+          throw new Error("Profile not found.");
+        }
+      } else {
+        throw new Error("No profiles saved.");
+      }
+    } catch (error) {
+      toast({
+        title: 'Error loading profile',
+        description: 'Could not find the selected profile. Please try again.',
+        variant: 'destructive',
+      });
+      router.push('/dashboard');
+    }
+  }, [searchParams, router, toast]);
+
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatMessages]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setFile: React.Dispatch<React.SetStateAction<File | null>>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
-
   const handleAnalyze = async () => {
-    if (!resume || !jd) {
+    if (!profile) {
       toast({
-        title: 'Missing Documents',
-        description: 'Please upload both your resume and the job description.',
+        title: 'No Profile Loaded',
+        description: 'Please select a profile from the dashboard first.',
         variant: 'destructive'
       });
       return;
@@ -56,25 +93,18 @@ export default function PrepRoom() {
     setPreparationStatus('Analyzing documents...');
     setPreparationProgress(10);
 
-    const formData = new FormData();
-    formData.append('resume', resume);
-    formData.append('jd', jd);
-
     try {
-      // Simulate progress updates
       const progressInterval = setInterval(() => {
-        setPreparationProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + 10;
-        });
+        setPreparationProgress(prev => Math.min(prev + 10, 90));
       }, 300);
 
       const response = await fetch('/api/analyze-documents', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resumeText: profile.resume,
+          jdText: profile.jobDescription,
+        }),
       });
 
       clearInterval(progressInterval);
@@ -165,42 +195,24 @@ export default function PrepRoom() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Preparation Progress</CardTitle>
+          <CardTitle>{profile ? `Preparing with: ${profile.name}` : "Preparation Progress"}</CardTitle>
         </CardHeader>
         <CardContent>
           <Progress value={preparationProgress} className="mb-2" />
           <p className="text-sm text-muted-foreground">{preparationStatus}</p>
         </CardContent>
+        {profile && !analysis && (
+          <CardFooter>
+            <Button onClick={handleAnalyze} disabled={isLoading} className="w-full">
+                {isLoading ? <LoadingSpinner className="mr-2" /> : <BrainCircuit />}
+                {isLoading ? 'Analyzing...' : 'Analyze Profile'}
+            </Button>
+          </CardFooter>
+        )}
       </Card>
       
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left Panel: Upload and Analysis */}
         <div className="lg:col-span-2 space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><UploadCloud /> Upload Documents</CardTitle>
-                    <CardDescription>Provide your resume and the job description.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="resume-upload" className="flex items-center gap-2"><FileText /> Resume (PDF, DOCX)</Label>
-                        <Input id="resume-upload" type="file" accept=".pdf,.docx" onChange={(e) => handleFileChange(e, setResume)} />
-                        {resume && <p className="text-xs text-muted-foreground truncate"><Paperclip className="inline mr-1 h-3 w-3"/>{resume.name}</p>}
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="jd-upload" className="flex items-center gap-2"><FileText /> Job Description (PDF, DOCX, TXT)</Label>
-                        <Input id="jd-upload" type="file" accept=".pdf,.docx,.txt" onChange={(e) => handleFileChange(e, setJd)} />
-                        {jd && <p className="text-xs text-muted-foreground truncate"><Paperclip className="inline mr-1 h-3 w-3"/>{jd.name}</p>}
-                    </div>
-                </CardContent>
-                <CardFooter>
-                    <Button onClick={handleAnalyze} disabled={!resume || !jd || isLoading} className="w-full">
-                        {isLoading ? <LoadingSpinner className="mr-2" /> : <BrainCircuit />}
-                        {isLoading ? 'Analyzing...' : 'Analyze Documents'}
-                    </Button>
-                </CardFooter>
-            </Card>
-
             {analysis && (
               <Card>
                 <CardHeader>
@@ -215,7 +227,6 @@ export default function PrepRoom() {
             )}
         </div>
         
-        {/* Right Panel: Chat Interface */}
         <div className="lg:col-span-3">
           <Card className="flex flex-col h-full min-h-[70vh]">
             <CardHeader>
@@ -227,7 +238,7 @@ export default function PrepRoom() {
                   {chatMessages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
                       <BrainCircuit className="h-12 w-12 mb-4" />
-                      <p>Upload and analyze your documents to start the conversation.</p>
+                      <p>{profile ? "Click 'Analyze Profile' to begin." : "Loading profile..."}</p>
                     </div>
                   ) : (
                     chatMessages.map((message, index) => (
@@ -257,7 +268,7 @@ export default function PrepRoom() {
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   onKeyDown={handleKeyPress}
-                  placeholder={analysis ? "Ask for clarification or a mock question..." : "Analyze documents to enable chat"}
+                  placeholder={analysis ? "Ask for clarification or a mock question..." : "Analyze your profile to enable chat"}
                   className="pr-20 min-h-[50px] resize-none"
                   rows={2}
                   disabled={isChatLoading || !analysis}
@@ -276,7 +287,6 @@ export default function PrepRoom() {
         </div>
       </div>
       
-      {/* Quick Action Buttons */}
       <Card className="mt-6">
         <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
@@ -291,4 +301,12 @@ export default function PrepRoom() {
       </Card>
     </div>
   );
+}
+
+export default function PrepRoomPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <PrepRoomContent />
+    </Suspense>
+  )
 }
