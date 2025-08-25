@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle, BrainCircuit } from 'lucide-react';
+import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -115,10 +115,6 @@ export default function DashboardPage() {
   };
   
   const selectedProfile = profiles.find(p => p.id === selectedProfileId);
-  
-  const prepRoomLink = selectedProfile
-    ? `/prep-room?profile=${selectedProfileId}`
-    : '/prep-room';
     
   const practiceLink = selectedProfile 
     ? `/practice?profile=${selectedProfileId}` 
@@ -194,29 +190,7 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
       
-      <div className="grid gap-8 md:grid-cols-3">
-        <Card className="flex flex-col">
-          <CardHeader>
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-500/10 dark:bg-blue-500/20">
-                <BrainCircuit className="h-6 w-6 text-blue-500" />
-            </div>
-            <CardTitle>Prep Room</CardTitle>
-            <CardDescription>Analyze documents and chat with an AI coach.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1">
-              <p className="text-sm text-muted-foreground">
-                Select a profile, then enter the prep room to get a detailed analysis. Chat with an AI assistant to practice questions, refine answers, and build a strategy. Your prep session trains the AI for the live co-pilot.
-              </p>
-          </CardContent>
-          <CardFooter>
-            <Button asChild className="w-full" variant="secondary" disabled={!selectedProfile}>
-              <Link href={prepRoomLink}>
-                Enter Prep Room <ArrowRight />
-              </Link>
-            </Button>
-          </CardFooter>
-        </Card>
-        
+      <div className="grid gap-8 md:grid-cols-2">
         <Card className="flex flex-col">
           <CardHeader>
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
