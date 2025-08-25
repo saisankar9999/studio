@@ -1,123 +1,114 @@
-'use client';
 
-import { useState, useTransition } from 'react';
+"use client";
+
+import { useState, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
+import PipMode from './PipMode';
 import TranscriptionDisplay from './TranscriptionDisplay';
-import { answerQuestion } from '@/ai/flows/answer-question';
-import { useToast } from '@/hooks/use-toast';
-import { LoadingSpinner } from './common/LoadingSpinner';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Textarea } from './ui/textarea';
 import AnswerDisplay from './AnswerDisplay';
+import { getUserPrepData, buildPromptWithPrepData } from '@/lib/interviewService';
+import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
+import { Button } from './ui/button';
+import { Badge } from './ui/badge';
 
 export default function InterviewCopilot() {
-  const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const { data: session } = useSession();
   const [transcript, setTranscript] = useState('');
-  const [answer, setAnswer] = useState('');
-  const [jobDescription, setJobDescription] = useState('');
-  const [resume, setResume] = useState('');
+  const [prepData, setPrepData] = useState<any>(null);
+  const [isLoadingPrepData, setIsLoadingPrepData] = useState(true);
 
-  const handleAudioTranscription = (audioBlob: Blob) => {
-    startTransition(async () => {
-      setTranscript('Transcribing and generating answer...');
-      setAnswer('');
-
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = async () => {
-        const base64Audio = reader.result as string;
-
-        try {
-          const result = await answerQuestion({
-            audioDataUri: base64Audio,
-            jobDescription: jobDescription,
-            resume: resume,
-          });
-
-          if (result && result.transcribedQuestion) {
-            setTranscript(result.transcribedQuestion);
-            setAnswer(result.answer);
-            toast({
-              title: 'Answer Generated',
-              description: 'The suggested answer is ready.',
-            });
-          } else {
-            setTranscript('Sorry, could not transcribe the audio.');
-             toast({
-              title: 'Error',
-              description: 'Failed to process audio.',
-              variant: 'destructive',
-            });
-          }
-        } catch (error) {
-            console.error(error);
-            const errorMessage = error instanceof Error ? error.message : "An unknown error occured."
-            setTranscript(`Error: ${errorMessage}`);
-            toast({
-                title: "Error",
-                description: errorMessage,
-                variant: 'destructive'
-            })
-        }
-      };
-      reader.onerror = () => {
-         setTranscript('Error reading audio file.');
-         toast({
-            title: 'Error',
-            description: 'Could not read the recorded audio.',
-            variant: 'destructive',
-          });
+  useEffect(() => {
+    const fetchPrepData = async () => {
+      // For now, we are not using next-auth, so we'll mock a user ID.
+      // In a real app, you would get this from the session.
+      const userId = session?.user?.id || 'mock-user-id';
+      
+      setIsLoadingPrepData(true);
+      try {
+        const data = await getUserPrepData(userId);
+        setPrepData(data);
+      } catch (error) {
+        console.error('Error fetching prep data:', error);
+      } finally {
+        setIsLoadingPrepData(false);
       }
-    });
+    };
+
+    fetchPrepData();
+  }, [session]);
+
+  const generateAnswer = async (question: string) => {
+    if (!question) return 'Please provide a question.';
+    
+    try {
+      const prompt = buildPromptWithPrepData(question, prepData);
+      
+      const response = await fetch('/api/generate-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          prompt,
+          userId: session?.user?.id || 'mock-user-id',
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'API request failed');
+      }
+
+      const data = await response.json();
+      return data.answer;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      console.error('Error generating answer:', error);
+      return `Sorry, I encountered an error generating an answer: ${errorMessage}`;
+    }
   };
 
   return (
     <div className="container mx-auto max-w-6xl p-4 py-8">
-       <h1 className="mb-2 font-headline text-4xl font-bold">
-        Live Interview Co-pilot
-      </h1>
-      <p className="mb-8 text-muted-foreground">
-        Use your microphone to capture the interviewer's question and get a real-time suggested answer.
-      </p>
-
-        <main>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-             <Card>
-                <CardHeader>
-                    <CardTitle className="text-lg">Context</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div>
-                        <label htmlFor="resume" className="block text-sm font-medium mb-1">Your Resume</label>
-                        <Textarea id="resume" placeholder="Paste your resume here for tailored answers..." value={resume} onChange={e => setResume(e.target.value)} className="min-h-[100px]"/>
-                    </div>
-                    <div>
-                        <label htmlFor="jd" className="block text-sm font-medium mb-1">Job Description</label>
-                        <Textarea id="jd" placeholder="Paste the job description here..." value={jobDescription} onChange={e => setJobDescription(e.target.value)} className="min-h-[100px]"/>
-                    </div>
-                </CardContent>
-             </Card>
-             <Card>
-                <CardHeader>
-                    <CardTitle className="text-lg">Keyboard Shortcuts</CardTitle>
-                </CardHeader>
-                 <CardContent>
-                    <ul className="text-sm space-y-2 text-muted-foreground">
-                    <li>
-                        Press <kbd className="font-mono p-1 bg-muted rounded-sm">R</kbd> to start recording the interviewer's question.
-                    </li>
-                    <li>
-                        Press <kbd className="font-mono p-1 bg-muted rounded-sm">S</kbd> to stop recording and generate an answer.
-                    </li>
-                    </ul>
-                </CardContent>
-             </Card>
+      <header className="mb-8 text-center">
+        <h1 className="text-4xl font-bold font-headline">Interview Copilot</h1>
+        <p className="text-lg text-muted-foreground mt-2">
+          Your AI-powered assistant for acing interviews.
+        </p>
+        {isLoadingPrepData ? (
+             <Badge variant="secondary">Loading prep data...</Badge>
+        ) : prepData ? (
+            <Badge variant="default" className="mt-2 bg-green-600">✓ Prep data loaded</Badge>
+        ) : (
+            <Badge variant="destructive" className="mt-2">No prep data found</Badge>
+        )}
+      </header>
+      
+      <main>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="space-y-6">
+            <TranscriptionDisplay onTranscript={setTranscript} />
+            
+            <Card>
+              <CardHeader><CardTitle>Keyboard Shortcuts</CardTitle></CardHeader>
+              <CardContent>
+                <ul className="text-sm space-y-2 text-muted-foreground">
+                  <li>Press <kbd className="font-mono p-1 bg-muted rounded-sm">R</kbd> to start recording.</li>
+                  <li>Press <kbd className="font-mono p-1 bg-muted rounded-sm">S</kbd> to stop recording & process.</li>
+                  <li>Press <kbd className="font-mono p-1 bg-muted rounded-sm">P</kbd> to toggle Picture-in-Picture mode.</li>
+                </ul>
+              </CardContent>
+            </Card>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <TranscriptionDisplay onAudioSubmit={handleAudioTranscription} transcript={transcript} isPending={isPending} />
-            <AnswerDisplay answer={answer} isLoading={isPending} />
-          </div>
-        </main>
+          
+          <AnswerDisplay transcript={transcript} generateAnswer={generateAnswer} />
+        </div>
+      </main>
+      
+      <PipMode>
+        <div className="p-2 bg-background rounded-lg border">
+          <TranscriptionDisplay onTranscript={setTranscript} />
+          <AnswerDisplay transcript={transcript} generateAnswer={generateAnswer} />
+        </div>
+      </PipMode>
     </div>
   );
 }

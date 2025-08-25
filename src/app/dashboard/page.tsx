@@ -3,9 +3,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle } from 'lucide-react';
+import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle, BrainCircuit } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -124,9 +124,8 @@ export default function DashboardPage() {
     ? `/live?profile=${selectedProfileId}`
     : '/live';
 
-
   return (
-    <div className="container mx-auto max-w-5xl p-4 py-8">
+    <div className="container mx-auto max-w-7xl p-4 py-8">
       <div className="text-center">
         <h1 className="mb-2 font-headline text-4xl font-bold">
           Welcome to AceTheInterview
@@ -191,73 +190,71 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
       
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid gap-8 md:grid-cols-3">
         <Card className="flex flex-col">
           <CardHeader>
-            <div className="flex items-center gap-4">
-               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                <Mic className="h-6 w-6 text-primary" />
-               </div>
-               <div>
-                <CardTitle>Practice Interview</CardTitle>
-                <CardDescription>Generate tailored questions and run a mock interview.</CardDescription>
-               </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-blue-500/10 dark:bg-blue-500/20">
+                <BrainCircuit className="h-6 w-6 text-blue-500" />
             </div>
+            <CardTitle>Prep Room</CardTitle>
+            <CardDescription>Analyze documents and chat with an AI coach.</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 space-y-4">
-              <Image 
-                src="https://placehold.co/600x400.png" 
-                alt="Practice interview illustration" 
-                width={600} 
-                height={400} 
-                className="rounded-lg object-cover"
-                data-ai-hint="interview preparation"
-              />
+          <CardContent className="flex-1">
               <p className="text-sm text-muted-foreground">
-                Upload your resume and the job description to get a list of 20 personalized interview questions. Then, enter a mock interview session where you can practice your answers and get instant AI feedback on your performance.
+                Upload your resume and a job description to get a detailed analysis. Chat with an AI assistant to practice questions, refine answers, and build a strategy. Your prep session trains the AI for the live co-pilot.
               </p>
           </CardContent>
-          <div className="p-6 pt-0">
+          <CardFooter>
+            <Button asChild className="w-full" variant="secondary">
+              <Link href="/prep-room">
+                Enter Prep Room <ArrowRight />
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+        
+        <Card className="flex flex-col">
+          <CardHeader>
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                <Mic className="h-6 w-6 text-primary" />
+            </div>
+            <CardTitle>Practice Interview</CardTitle>
+            <CardDescription>Generate tailored questions and run a mock interview.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1">
+              <p className="text-sm text-muted-foreground">
+                Get a list of personalized interview questions based on your profile. Enter a mock interview session to practice your answers and get instant AI feedback on your performance.
+              </p>
+          </CardContent>
+          <CardFooter>
             <Button asChild className="w-full">
               <Link href={practiceLink}>
                 Start Practice <ArrowRight />
               </Link>
             </Button>
-          </div>
+          </CardFooter>
         </Card>
         
         <Card className="flex flex-col">
           <CardHeader>
-            <div className="flex items-center gap-4">
-               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent/10">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent/10">
                 <Video className="h-6 w-6 text-accent" />
-               </div>
-               <div>
-                <CardTitle>Live Interview Co-pilot</CardTitle>
-                <CardDescription>Get discreet, real-time assistance during your calls.</CardDescription>
-               </div>
             </div>
+            <CardTitle>Live Interview Co-pilot</CardTitle>
+            <CardDescription>Get discreet, real-time assistance during your calls.</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 space-y-4">
-               <Image 
-                src="https://placehold.co/600x400.png" 
-                alt="Live interview copilot illustration" 
-                width={600} 
-                height={400} 
-                className="rounded-lg object-cover"
-                data-ai-hint="video conference call"
-               />
+          <CardContent className="flex-1">
               <p className="text-sm text-muted-foreground">
-                Launch a discreet, undetectable overlay during your live interviews on Zoom or Teams. Use keyboard shortcuts to transcribe the interviewer's question and get a perfectly formulated answer in real-time.
+                Launch a discreet assistant during your live interviews. The co-pilot listens to the interviewer and provides you with perfectly formulated answers in real-time, based on your prep session.
               </p>
           </CardContent>
-           <div className="p-6 pt-0">
+           <CardFooter>
             <Button asChild className="w-full" variant="secondary">
               <Link href={liveLink}>
                 Launch Live Co-pilot <ArrowRight />
               </Link>
             </Button>
-          </div>
+          </CardFooter>
         </Card>
       </div>
     </div>
