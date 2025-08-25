@@ -145,7 +145,7 @@ function PrepRoomContent() {
   };
 
   const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isChatLoading) return;
+    if (!inputMessage.trim() || isChatLoading || !profile) return;
 
     const newMessage = { role: 'user', content: inputMessage };
     setChatMessages((prev) => [...prev, newMessage]);
@@ -158,7 +158,8 @@ function PrepRoomContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: [...chatMessages, newMessage],
-          resumeAnalysis: analysis,
+          resumeText: profile.resume,
+          jdText: profile.jobDescription,
         }),
       });
 
