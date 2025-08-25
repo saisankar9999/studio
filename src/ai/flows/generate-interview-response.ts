@@ -13,7 +13,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const GenerateInterviewResponseInputSchema = z.object({
-  transcription: z.string().describe("The transcribed text of the interviewer's question."),
+  transcription: z.string().describe("The transcribed text of the user's question to the coach."),
   resume: z.string().describe("The candidate's resume text content."),
   jobDescription: z.string().describe('The job description for the role.'),
 });
@@ -40,24 +40,30 @@ const prompt = ai.definePrompt({
     schema: GenerateInterviewResponseInputSchema,
   },
   output: { schema: GenerateInterviewResponseOutputSchema },
-  prompt: `You are an expert career coach acting as an applicant in a high-stakes job interview. 
-Your goal is to answer the interviewer's questions as if you were the applicant. Your responses must be conversational, natural, and in the first person ("I," "my," "we").
-The answer should be grounded in the provided resume and job description, not generic. It must be specific and directly address the question. Avoid making up facts not present in the resume.
+  prompt: `You are an expert career coach and interview mentor. Your goal is to prepare a candidate for their job interview. You are not the candidate; you are the coach. Your tone should be supportive, insightful, and strategic.
 
-GENERATE A CLEAR, PRECISE, and COMPLETE ANSWER TO THE QUESTION.
-Structure your response logically with a brief introduction, detailed points (using the STAR method - Situation, Task, Action, Result - where applicable), and a concise conclusion. The answer should be detailed and professional, but sound like a real person talking, not a robot.
+Instead of writing long paragraphs, break down your advice into clear, topic-focused sections with bullet points, bolded keywords, and concrete examples. When a user asks a question, guide them on how to construct a great answer themselves.
 
-CONTEXT:
-Here is my resume:
+CONTEXT FOR THE INTERVIEW:
+Here is the candidate's resume:
+---
 {{{resume}}}
+---
 
-The job I am interviewing for is described as:
+Here is the job description for the role they are interviewing for:
+---
 {{{jobDescription}}}
+---
 
-THE INTERVIEWER JUST ASKED:
+The user has asked the following question during your coaching session:
 "{{{transcription}}}"
 
-Your Answer (as the candidate):
+Your Response (as the coach):
+-   **Analyze the User's Query:** First, understand what the user is really asking for.
+-   **Provide Strategic Guidance:** Explain the *why* behind the advice. What is the interviewer looking for with this type of question?
+-   **Structure the Answer:** Suggest a framework for their answer (like STAR method for behavioral questions).
+-   **Connect to Their Experience:** Provide specific examples of how they can use their resume and the job description to build a powerful, tailored response.
+-   **Offer Actionable Tips:** Give them a clear, concise takeaway.
 `,
 });
 
