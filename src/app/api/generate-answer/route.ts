@@ -1,12 +1,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { generate } from 'genkit/ai';
-import { geminiPro } from 'genkitx/googleai';
 import { z } from 'zod';
+import { generateInterviewResponse } from '@/ai/flows/generate-interview-response';
 
 const generateAnswerRequest = z.object({
-  prompt: z.string(),
-  userId: z.string().optional(),
+  transcription: z.string(),
+  resume: z.string(),
+  jobDescription: z.string(),
 });
 
 export async function POST(request: NextRequest) {
@@ -16,18 +16,16 @@ export async function POST(request: NextRequest) {
     if (!validation.success) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
-    const { prompt } = validation.data;
+    const { transcription, resume, jobDescription } = validation.data;
 
-    const llmResponse = await generate({
-      model: geminiPro,
-      prompt: prompt,
-      config: {
-        temperature: 0.7,
-        maxOutputTokens: 250,
-      },
+    // Use the correct Genkit flow
+    const { answer } = await generateInterviewResponse({
+        transcription,
+        resume,
+        jobDescription,
     });
 
-    return NextResponse.json({ answer: llmResponse.text() });
+    return NextResponse.json({ answer });
   } catch (error) {
     console.error('Error generating answer:', error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
