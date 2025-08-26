@@ -136,5 +136,3 @@ export default function TranscriptionDisplay({ onAudioSubmit, transcript, isPend
     </Card>
   );
 }
-
-    
