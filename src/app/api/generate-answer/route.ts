@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { generateInterviewResponse } from '@/ai/flows/generate-interview-response';

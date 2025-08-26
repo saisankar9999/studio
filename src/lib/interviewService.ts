@@ -1,4 +1,3 @@
-
 import { configureFirebase } from './firebase/firebase-admin';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore/lite';
 
