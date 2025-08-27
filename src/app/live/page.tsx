@@ -11,6 +11,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { marked } from 'marked';
+
 
 interface Profile {
   id: string;
@@ -158,7 +160,7 @@ const DraggableStealthOverlay = ({
           <Bot className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" />
           <div className="flex-1">
             {isLoading && <Loader2 className="h-5 w-5 animate-spin" />}
-            {aiResponse && !isLoading && <p>{aiResponse}</p>}
+            {aiResponse && !isLoading && <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: aiResponse }} />}
             {!aiResponse && !isLoading && <p className="text-muted-foreground italic">AI response will appear here.</p>}
           </div>
         </div>
@@ -239,7 +241,8 @@ function LivePageContent() {
         resume: resume || resumePlaceholder,
         jobDescription: jobDescription || jobDescriptionPlaceholder,
       });
-      setAiResponse(response.answer);
+      const htmlAnswer = await marked(response.answer);
+      setAiResponse(htmlAnswer);
     } catch (error) {
       console.error("Error generating AI response:", error);
       toast({ variant: "destructive", title: "AI Error", description: "Failed to generate a response." });
@@ -435,7 +438,7 @@ function LivePageContent() {
                       )}
                       {aiResponse && !isLoading && (
                         <div key={aiResponse} className="prose prose-sm prose-p:text-foreground dark:prose-invert animate-in fade-in-50 duration-500">
-                           <div dangerouslySetInnerHTML={{ __html: aiResponse.replace(/\n/g, '<br />') }}></div>
+                           <div dangerouslySetInnerHTML={{ __html: aiResponse }}></div>
                         </div>
                       )}
                       {!aiResponse && !isLoading && (

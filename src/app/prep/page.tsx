@@ -14,6 +14,7 @@ import { generateInterviewResponse } from '@/ai/flows/generate-interview-respons
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { marked } from 'marked';
 
 interface Profile {
   id: string;
@@ -80,12 +81,13 @@ export default function PrepRoomPage() {
       return;
     }
     startPlanTransition(async () => {
-      const result = await generatePrepPlan({ resume, jobDescription });
-      if (result.plan) {
-        setPrepPlan(result.plan);
+      try {
+        const result = await generatePrepPlan({ resume, jobDescription });
+        const htmlPlan = await marked(result.plan);
+        setPrepPlan(htmlPlan);
         toast({ title: 'Success!', description: 'Your personalized prep plan is ready.' });
-      } else {
-        toast({ title: 'Error', description: 'Failed to generate a prep plan.', variant: 'destructive' });
+      } catch (error) {
+         toast({ title: 'Error', description: 'Failed to generate a prep plan.', variant: 'destructive' });
       }
     });
   };
@@ -107,7 +109,8 @@ export default function PrepRoomPage() {
           conversationHistory: newConversation.slice(-4) // Send last 4 messages for context
         });
         
-        setConversation(prev => [...prev, { role: 'model', content: result.answer }]);
+        const htmlAnswer = await marked(result.answer);
+        setConversation(prev => [...prev, { role: 'model', content: htmlAnswer }]);
 
         // Save conversation for live interview grounding
         if (profileId) {
@@ -123,8 +126,9 @@ export default function PrepRoomPage() {
         }
 
       } catch (error) {
-        toast({ title: 'Error', description: 'The AI mentor could not respond.', variant: 'destructive' });
-        setConversation(prev => prev.slice(0, -1)); // Remove user's last message on error
+        toast({ title: 'Error', description: 'The AI mentor could not respond. Please try again.', variant: 'destructive' });
+        // Restore conversation on error
+        setConversation(prev => prev.slice(0, -1));
       }
     });
   };
@@ -176,7 +180,7 @@ export default function PrepRoomPage() {
                 <ScrollArea className="h-[400px] pr-4">
                   <div
                     className="prose prose-sm dark:prose-invert max-w-none"
-                    dangerouslySetInnerHTML={{ __html: prepPlan.replace(/\n/g, '<br />') }}
+                    dangerouslySetInnerHTML={{ __html: prepPlan }}
                   />
                 </ScrollArea>
               </CardContent>
@@ -205,7 +209,7 @@ export default function PrepRoomPage() {
                   <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'model' && <Bot className="h-6 w-6 flex-shrink-0 text-accent" />}
                     <div className={`rounded-lg p-3 max-w-[85%] ${msg.role === 'model' ? 'bg-muted' : 'bg-primary text-primary-foreground'}`}>
-                      <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: msg.content.replace(/\n/g, '<br />') }}></div>
+                      <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: msg.content }}></div>
                     </div>
                      {msg.role === 'user' && <User className="h-6 w-6 flex-shrink-0 text-primary" />}
                   </div>
