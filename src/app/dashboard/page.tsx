@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle } from 'lucide-react';
+import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle, BrainCircuit } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -118,6 +118,10 @@ export default function DashboardPage() {
   const practiceLink = selectedProfile 
     ? `/practice?profile=${selectedProfileId}` 
     : '/practice';
+
+  const prepLink = selectedProfile
+    ? `/prep?profile=${selectedProfileId}`
+    : '/prep';
     
   const liveLink = selectedProfile 
     ? `/live?profile=${selectedProfileId}`
@@ -189,22 +193,44 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
       
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid gap-8 md:grid-cols-3">
         <Card className="flex flex-col">
           <CardHeader>
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-                <Mic className="h-6 w-6 text-primary" />
+                <BrainCircuit className="h-6 w-6 text-primary" />
             </div>
-            <CardTitle>Practice Interview</CardTitle>
-            <CardDescription>Generate tailored questions and run a mock interview.</CardDescription>
+            <CardTitle>Prep Room</CardTitle>
+            <CardDescription>Get a personalized plan and chat with an AI mentor.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
               <p className="text-sm text-muted-foreground">
-                Get a list of personalized interview questions based on your profile. Enter a mock interview session to practice your answers and get instant AI feedback on your performance.
+                Generate a "fast track" interview prep plan based on your profile. Chat with an AI assistant to clarify doubts and deepen your understanding, just like talking to a real mentor.
               </p>
           </CardContent>
           <CardFooter>
             <Button asChild className="w-full">
+              <Link href={prepLink}>
+                Enter Prep Room <ArrowRight />
+              </Link>
+            </Button>
+          </CardFooter>
+        </Card>
+
+        <Card className="flex flex-col">
+          <CardHeader>
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-secondary/20">
+                <Mic className="h-6 w-6 text-secondary-foreground" />
+            </div>
+            <CardTitle>Practice Interview</CardTitle>
+            <CardDescription>Run a mock interview and get instant feedback.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1">
+              <p className="text-sm text-muted-foreground">
+                Use your profile to generate tailored questions. Practice your answers by recording them and receive AI-powered feedback on your performance and delivery.
+              </p>
+          </CardContent>
+          <CardFooter>
+            <Button asChild className="w-full" variant="secondary">
               <Link href={practiceLink}>
                 Start Practice <ArrowRight />
               </Link>
@@ -218,15 +244,15 @@ export default function DashboardPage() {
                 <Video className="h-6 w-6 text-accent" />
             </div>
             <CardTitle>Live Interview Co-pilot</CardTitle>
-            <CardDescription>Get discreet, real-time assistance during your calls.</CardDescription>
+            <CardDescription>Get discreet, real-time assistance during calls.</CardDescription>
           </CardHeader>
           <CardContent className="flex-1">
               <p className="text-sm text-muted-foreground">
-                Launch a discreet assistant during your live interviews. The co-pilot listens to the interviewer and provides you with perfectly formulated answers in real-time, based on your prep session.
+                Launch a discreet assistant during live interviews. The co-pilot listens and provides grounded, real-time answer suggestions based on your profile and prep sessions.
               </p>
           </CardContent>
            <CardFooter>
-            <Button asChild className="w-full" variant="secondary">
+            <Button asChild className="w-full" variant="outline">
               <Link href={liveLink}>
                 Launch Live Co-pilot <ArrowRight />
               </Link>

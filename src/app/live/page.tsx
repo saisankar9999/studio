@@ -233,8 +233,9 @@ function LivePageContent() {
     setAiResponse('');
 
     try {
+      // For live copilot, we don't send conversation history to keep it focused on the current question
       const response = await generateInterviewResponse({
-        transcription: question,
+        question,
         resume: resume || resumePlaceholder,
         jobDescription: jobDescription || jobDescriptionPlaceholder,
       });
@@ -355,7 +356,7 @@ function LivePageContent() {
       <div className="min-h-screen w-full bg-background text-foreground">
         <header className="border-b">
           <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
-            <h1 className="text-2xl font-bold">WhisperAssist</h1>
+            <h1 className="text-2xl font-bold">Live Co-pilot</h1>
              <div className="flex items-center gap-2">
                <p className="text-sm text-muted-foreground hidden md:block">Your AI Interview Co-pilot</p>
               <Tooltip>
@@ -434,7 +435,7 @@ function LivePageContent() {
                       )}
                       {aiResponse && !isLoading && (
                         <div key={aiResponse} className="prose prose-sm prose-p:text-foreground dark:prose-invert animate-in fade-in-50 duration-500">
-                           <p>{aiResponse}</p>
+                           <div dangerouslySetInnerHTML={{ __html: aiResponse.replace(/\n/g, '<br />') }}></div>
                         </div>
                       )}
                       {!aiResponse && !isLoading && (
@@ -464,5 +465,3 @@ export default function LivePage() {
     </Suspense>
   );
 }
-
-    
