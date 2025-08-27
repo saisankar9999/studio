@@ -112,22 +112,9 @@ export default function PrepRoomPage() {
         const htmlAnswer = await marked(result.answer);
         setConversation(prev => [...prev, { role: 'model', content: htmlAnswer }]);
 
-        // Save conversation for live interview grounding
-        if (profileId) {
-          await fetch('/api/save-conversation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              profileId,
-              question,
-              answer: result.answer,
-            }),
-          });
-        }
-
       } catch (error) {
         toast({ title: 'Error', description: 'The AI mentor could not respond. Please try again.', variant: 'destructive' });
-        // Restore conversation on error
+        // Restore conversation on error by removing the user's last message
         setConversation(prev => prev.slice(0, -1));
       }
     });
