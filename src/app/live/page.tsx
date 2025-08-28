@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { generateInterviewResponse } from '@/ai/flows/generate-interview-response';
+import { generateLiveResponse } from '@/ai/flows/generate-live-response';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mic, Square, Bot, User, Loader2, Video, Power, PowerOff } from 'lucide-react';
@@ -235,8 +235,7 @@ function LivePageContent() {
     setAiResponse('');
 
     try {
-      // For live copilot, we don't send conversation history to keep it focused on the current question
-      const response = await generateInterviewResponse({
+      const response = await generateLiveResponse({
         question,
         resume: resume || resumePlaceholder,
         jobDescription: jobDescription || jobDescriptionPlaceholder,
