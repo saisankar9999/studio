@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -12,14 +13,14 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
 const GenerateLiveResponseInputSchema = z.object({
-  question: z.string().describe("The user's question to the AI mentor."),
+  question: z.string().describe("The interview question that was asked."),
   resume: z.string().describe("The candidate's resume text content."),
   jobDescription: z.string().describe('The job description for the role.'),
 });
 export type GenerateLiveResponseInput = z.infer<typeof GenerateLiveResponseInputSchema>;
 
 const GenerateLiveResponseOutputSchema = z.object({
-  answer: z.string(),
+  answer: z.string().describe("A concise, first-person answer to the interview question."),
 });
 export type GenerateLiveResponseOutput = z.infer<typeof GenerateLiveResponseOutputSchema>;
 
@@ -35,19 +36,12 @@ const prompt = ai.definePrompt({
     schema: GenerateLiveResponseInputSchema
   },
   output: { schema: GenerateLiveResponseOutputSchema },
-  prompt: `You are an expert AI career coach and interview mentor, like ChatGPT. Your goal is to help a candidate prepare for their job interview by providing detailed, accurate, and helpful information. Your persona is that of a knowledgeable and direct assistant. You are not the candidate. Do not role-play. Answer the user's questions directly.
+  prompt: `You are an expert career coach providing a suggested answer for a candidate in a live interview.
+Your task is to formulate a concise, professional answer to the interviewer's question. The answer MUST be from the candidate's perspective, using the first person (e.g., "I," "my," "I have experience with...").
 
-Your tone should be supportive and insightful. Your responses MUST be highly structured and easy to read.
+The response should be under 150 words and directly address the question. It should not be a conversation with the user, but rather a polished answer ready to be spoken.
 
-Follow these formatting rules STRICTLY:
-- Use clear headings with '##' for main topics.
-- Use bullet points ('•') for lists and key points.
-- Use **bold text** to highlight key terms, concepts, and important phrases.
-- Use numbered lists for step-by-step processes.
-- Provide concrete, relevant examples to illustrate your points, especially when explaining technical concepts or behavioral strategies.
-- Keep the language clear, concise, and professional.
-
-CONTEXT FOR THE INTERVIEW:
+Use the following context to tailor the answer:
 Candidate's Resume:
 ---
 {{{resume}}}
@@ -57,10 +51,10 @@ Job Description:
 {{{jobDescription}}}
 ---
 
-The user, who you are coaching, has just asked the following question:
+Interviewer's Question:
 "{{{question}}}"
 
-Your Response (as the AI coach):`,
+Your Suggested Answer (as the candidate):`,
 });
 
 const generateLiveResponseFlow = ai.defineFlow(
