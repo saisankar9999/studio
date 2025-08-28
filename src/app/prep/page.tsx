@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { marked } from 'marked';
 import { configureFirebase } from '@/lib/firebase/firebase-client'; // Import client firebase
-import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 
 interface Profile {
@@ -83,12 +83,12 @@ export default function PrepRoomPage() {
 
     const unsubscribe = onSnapshot(q, async (querySnapshot) => {
         const messages: ChatMessage[] = [];
-        for (const doc of querySnapshot.docs) {
+        // Use Promise.all to handle all async marked calls
+        await Promise.all(querySnapshot.docs.map(async (doc) => {
             const data = doc.data();
-            // The AI flow now returns markdown, so we need to parse it
             const content = data.role === 'model' ? await marked(data.content) : data.content;
             messages.push({ role: data.role, content });
-        }
+        }));
         setConversation(messages);
     }, (error) => {
         console.error("Error fetching conversation:", error);
@@ -136,7 +136,8 @@ export default function PrepRoomPage() {
 
     startAnswerTransition(async () => {
       try {
-        // The flow now handles saving the conversation, so we just call it.
+        // The flow now handles fetching history and saving the new messages.
+        // We just need to call it. The UI will update via the onSnapshot listener.
         await generateInterviewResponse({
           question,
           resume,
@@ -145,7 +146,10 @@ export default function PrepRoomPage() {
         });
         
       } catch (error) {
-        toast({ title: 'Error', description: 'The AI mentor could not respond. Please try again.', variant: 'destructive' });
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        toast({ title: 'Error', description: `The AI mentor could not respond: ${errorMessage}`, variant: 'destructive' });
+        // If the call fails, add the user's question back to the input
+        setUserQuestion(question);
       }
     });
   };
@@ -175,7 +179,7 @@ export default function PrepRoomPage() {
                 <Textarea id="job-description" placeholder="Paste the job description here..." className="min-h-[150px]" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} />
               </div>
               <Button onClick={handleGeneratePlan} disabled={isGeneratingPlan} className="w-full">
-                {isGeneratingPlan ? <LoadingSpinner /> : <Sparkles />}
+                {isGeneratingPlan ? <LoadingSpinner className="mr-2" /> : <Sparkles className="mr-2" />}
                 Generate Prep Plan
               </Button>
             </CardContent>

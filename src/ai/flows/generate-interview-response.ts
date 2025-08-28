@@ -21,19 +21,17 @@ const GenerateInterviewResponseInputSchema = z.object({
 });
 export type GenerateInterviewResponseInput = z.infer<typeof GenerateInterviewResponseInputSchema>;
 
+// The output is now just a confirmation, as the result is streamed to Firestore.
 const GenerateInterviewResponseOutputSchema = z.object({
-  answer: z
-    .string()
-    .describe(
-      'A helpful, direct answer from the perspective of an AI career coach.'
-    ),
+  success: z.boolean(),
 });
 export type GenerateInterviewResponseOutput = z.infer<typeof GenerateInterviewResponseOutputSchema>;
 
 export async function generateInterviewResponse(
   input: GenerateInterviewResponseInput
 ): Promise<GenerateInterviewResponseOutput> {
-  return generateInterviewResponseFlow(input);
+  await generateInterviewResponseFlow(input);
+  return { success: true };
 }
 
 
@@ -55,7 +53,7 @@ const prompt = ai.definePrompt({
       conversationHistory: z.array(ChatMessageSchema).optional(),
     })
   },
-  output: { schema: GenerateInterviewResponseOutputSchema },
+  output: { schema: z.object({ answer: z.string() }) },
   prompt: `You are an expert AI career coach and interview mentor, like ChatGPT. Your goal is to help a candidate prepare for their job interview by providing detailed, accurate, and helpful information. Your persona is that of a knowledgeable and direct assistant. You are not the candidate. Do not role-play. Answer the user's questions directly.
 
 Your tone should be supportive and insightful. Your responses MUST be highly structured and easy to read.
@@ -97,25 +95,45 @@ const generateInterviewResponseFlow = ai.defineFlow(
   {
     name: 'generateInterviewResponseFlow',
     inputSchema: GenerateInterviewResponseInputSchema,
-    outputSchema: GenerateInterviewResponseOutputSchema,
+    outputSchema: z.void(), // This flow doesn't directly return to the client
   },
   async ({ question, resume, jobDescription, profileId }) => {
     const { db, firestore } = configureFirebase();
-
-    let conversationHistory: ChatMessage[] = [];
-    if (db) {
-      try {
-        const conversationRef = db.collection('prepConversations').doc(profileId).collection('messages');
-        const snapshot = await conversationRef.orderBy('timestamp', 'desc').limit(4).get();
-        if (!snapshot.empty) {
-          conversationHistory = snapshot.docs.map(doc => doc.data() as ChatMessage).reverse();
-        }
-      } catch (error) {
-        console.error("Error fetching conversation history from Firestore:", error);
-        // Proceed without history if Firestore fetch fails
-      }
+    if (!db || !firestore) {
+      console.error("Firestore not initialized. Cannot proceed.");
+      throw new Error('Server-side Firestore is not configured.');
     }
 
+    const conversationRef = db.collection('prepConversations').doc(profileId).collection('messages');
+
+    // 1. Save the user's question to Firestore immediately.
+    const userMessageRef = conversationRef.doc();
+    await userMessageRef.set({
+        role: 'user',
+        content: question,
+        timestamp: firestore.FieldValue.serverTimestamp(),
+    });
+
+    // 2. Fetch the last 4 messages for context
+    let conversationHistory: ChatMessage[] = [];
+    try {
+      const snapshot = await conversationRef.orderBy('timestamp', 'desc').limit(4).get();
+      if (!snapshot.empty) {
+        // We add the new user question to the history for the AI prompt
+        conversationHistory = [
+            { role: 'user', content: question },
+            ...snapshot.docs.map(doc => doc.data() as ChatMessage)
+        ].reverse();
+      } else {
+        conversationHistory = [{ role: 'user', content: question }];
+      }
+    } catch (error) {
+      console.error("Error fetching conversation history from Firestore:", error);
+      // Proceed with just the current question if history fails
+      conversationHistory = [{ role: 'user', content: question }];
+    }
+
+    // 3. Generate the AI response
     const { output } = await prompt({
       question,
       resume,
@@ -123,38 +141,16 @@ const generateInterviewResponseFlow = ai.defineFlow(
       conversationHistory
     });
 
-    if (!output) {
-      throw new Error('Failed to generate an answer.');
+    if (!output || !output.answer) {
+      throw new Error('Failed to generate an answer from the AI model.');
     }
 
-    // Save the new question and answer to Firestore
-    if (db) {
-       try {
-        const conversationRef = db.collection('prepConversations').doc(profileId).collection('messages');
-        const userMessageRef = conversationRef.doc();
-        const modelMessageRef = conversationRef.doc();
-
-        const batch = db.batch();
-        batch.set(userMessageRef, {
-            role: 'user',
-            content: question,
-            timestamp: firestore.FieldValue.serverTimestamp(),
-        });
-        batch.set(modelMessageRef, {
-            role: 'model',
-            content: output.answer,
-            timestamp: firestore.FieldValue.serverTimestamp(),
-        });
-        await batch.commit();
-
-       } catch (error) {
-           console.error("Error saving conversation to Firestore:", error);
-           // Do not throw error to user, just log it. The primary function is to return an answer.
-       }
-    }
-    
-    return {
-      answer: output.answer,
-    };
+    // 4. Save the AI's answer to Firestore
+    const modelMessageRef = conversationRef.doc();
+    await modelMessageRef.set({
+        role: 'model',
+        content: output.answer,
+        timestamp: firestore.FieldValue.serverTimestamp(),
+    });
   }
 );
