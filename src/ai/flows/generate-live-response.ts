@@ -4,14 +4,13 @@
 /**
  * @fileOverview A flow for generating a tailored interview response for the Live Co-pilot.
  *
- * - generateLiveResponse - Generates an answer to a question, contextualized by resume and JD.
+ * - generateLiveResponse - Generates an answer to a question, contextualized by resume, JD, and conversation history.
  * - GenerateLiveResponseInput - The input type for the function.
  * - GenerateLiveResponseOutput - The return type for the function.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { googleAI } from '@genkit-ai/googleai';
 
 // Define a schema for conversation history messages
 const ChatMessageSchema = z.object({
@@ -37,14 +36,8 @@ export type GenerateLiveResponseOutput = z.infer<typeof GenerateLiveResponseOutp
 export async function generateLiveResponse(
   input: GenerateLiveResponseInput
 ): Promise<GenerateLiveResponseOutput> {
-  const { output } = await prompt(input);
-
-  if (!output) {
-    throw new Error('Failed to generate an answer from the AI model.');
-  }
-  return { answer: output.answer };
+  return generateLiveResponseFlow(input);
 }
-
 
 const prompt = ai.definePrompt({
   name: 'generateLiveResponsePrompt',
@@ -82,7 +75,6 @@ Most Recent Interviewer's Question:
 Your Suggested Answer (as the candidate):`,
 });
 
-// This flow is no longer used for streaming but is kept for potential non-streaming use cases.
 const generateLiveResponseFlow = ai.defineFlow(
   {
     name: 'generateLiveResponseFlow',
@@ -98,20 +90,3 @@ const generateLiveResponseFlow = ai.defineFlow(
     return { answer: output.answer };
   }
 );
-
-
-// New Streaming Flow - Corrected Implementation
-export async function generateLiveResponseStream(input: GenerateLiveResponseInput): Promise<ReadableStream<string>> {
-  
-  // 1. Use ai.generateStream with a model that supports it and the correct input format
-  const { stream } = ai.generateStream({
-    model: googleAI('gemini-2.0-flash'),
-    prompt: await prompt.compile(input), // Pass the compiled prompt text
-    output: {
-      format: 'text', // We want raw text for streaming
-    },
-  });
-
-  return stream;
-}
-

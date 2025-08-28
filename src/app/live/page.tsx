@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mic, Square, Bot, User, Loader2, Video, Power, PowerOff } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
+import { generateLiveResponse } from '@/ai/flows/generate-live-response';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { StealthModeOverlay } from '@/components/common/StealthModeOverlay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { marked } from 'marked';
-import { StealthModeOverlay } from '@/components/common/StealthModeOverlay';
 
 
 interface Profile {
@@ -81,7 +82,6 @@ function LivePageContent() {
   const [jobDescription, setJobDescription] = useState('');
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [transcription, setTranscription] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [stealthMode, setStealthMode] = useState(false);
@@ -137,47 +137,23 @@ function LivePageContent() {
     };
   }, [searchParams, toast]);
 
-  const handleGenerateResponseStream = useCallback(async (question: string) => {
+  const handleGenerateResponse = useCallback(async (question: string) => {
     if (!question) return;
 
     setIsLoading(true);
-    setAiResponse('');
-
     const currentHistory: ChatMessage[] = [...conversationHistory, { role: 'user', content: question }];
     setConversationHistory(currentHistory);
 
     try {
-      const response = await fetch('/api/generate-live-stream', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          resume: resume || resumePlaceholder,
-          jobDescription: jobDescription || jobDescriptionPlaceholder,
-          conversationHistory: currentHistory,
-        }),
+      const { answer } = await generateLiveResponse({
+        question,
+        resume: resume || resumePlaceholder,
+        jobDescription: jobDescription || jobDescriptionPlaceholder,
+        conversationHistory: currentHistory,
       });
 
-      if (!response.ok || !response.body) {
-        throw new Error(`API error: ${response.statusText}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullAnswer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-        fullAnswer += chunk;
-        setAiResponse(prev => prev + chunk);
-      }
-      
-      const finalHtmlAnswer = await marked(fullAnswer);
-      setAiResponse(finalHtmlAnswer);
-      setConversationHistory(prev => [...prev, { role: 'model', content: fullAnswer }]);
+      const finalHtmlAnswer = await marked(answer);
+      setConversationHistory(prev => [...prev, { role: 'model', content: finalHtmlAnswer }]);
 
     } catch (error) {
       console.error("Error generating AI response:", error);
@@ -215,7 +191,6 @@ function LivePageContent() {
 
     recognition.onstart = () => {
       setIsSessionActive(true);
-      setAiResponse('');
       setTranscription('');
       finalTranscriptRef.current = '';
       setConversationHistory([]); // Reset history for new session
@@ -226,15 +201,13 @@ function LivePageContent() {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       // Process any remaining transcript
       if (finalTranscriptRef.current.trim() && !isLoading) {
-        handleGenerateResponseStream(finalTranscriptRef.current.trim());
+        handleGenerateResponse(finalTranscriptRef.current.trim());
         finalTranscriptRef.current = '';
       }
     };
 
     recognition.onerror = (event: any) => {
-      // The "aborted" error is thrown when the user manually stops the recognition,
-      // which is expected behavior, so we can safely ignore it.
-      if (event.error === 'aborted') {
+       if (event.error === 'aborted') {
         console.log('Speech recognition aborted by user.');
         return;
       }
@@ -271,7 +244,8 @@ function LivePageContent() {
         if (finalTranscriptRef.current.trim() && !isLoading) {
           const questionToProcess = finalTranscriptRef.current.trim();
           finalTranscriptRef.current = '';
-          handleGenerateResponseStream(questionToProcess);
+          setTranscription(''); // Clear the live transcription view
+          handleGenerateResponse(questionToProcess);
         }
       }, 1500); // 1.5 seconds of silence triggers generation
     };
@@ -294,8 +268,8 @@ function LivePageContent() {
         onClose={() => setStealthMode(false)}
         isSessionActive={isSessionActive}
         isLoading={isLoading}
+        conversationHistory={conversationHistory}
         transcription={transcription}
-        aiResponse={aiResponse}
       />
       
       <div className="min-h-screen w-full bg-background text-foreground" style={{ display: stealthMode ? 'none' : 'block' }}>
@@ -351,44 +325,39 @@ function LivePageContent() {
               <Card className="min-h-[400px] shadow-2xl bg-card/80 backdrop-blur-sm border-2 border-primary/20">
                 <CardHeader className="border-b">
                   <CardTitle className="flex items-center gap-2 text-lg">
-                    <User className="h-5 w-5 text-primary" />
-                    Interviewer's Question
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4 min-h-[100px]">
-                  <p className="text-base font-medium">
-                    {transcription || (
-                      <span className="text-muted-foreground italic">
-                        {isSessionActive ? "Listening..." : "Start a session to begin."}
-                      </span>
-                    )}
-                  </p>
-                </CardContent>
-                <CardHeader className="border-t">
-                   <CardTitle className="flex items-center gap-2 text-lg">
                     <Bot className="h-5 w-5 text-accent" />
-                    AI Co-pilot Response
+                    Interview Conversation
                   </CardTitle>
                 </CardHeader>
-                 <CardContent className="pt-4">
-                    <div className="w-full">
-                      {isLoading && !aiResponse && (
-                        <div className="flex items-center space-x-2">
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                          <p className="text-muted-foreground italic">Generating response...</p>
-                        </div>
-                      )}
-                      {aiResponse && (
-                        <div key={aiResponse} className="prose prose-sm prose-p:text-foreground dark:prose-invert">
-                           <div dangerouslySetInnerHTML={{ __html: isLoading ? marked.parse(aiResponse) : aiResponse }}></div>
-                        </div>
-                      )}
-                      {!aiResponse && !isLoading && (
-                        <p className="text-muted-foreground italic text-sm">
-                           Responses will be shown here.
-                        </p>
-                      )}
-                    </div>
+                 <CardContent className="pt-4 h-[400px] overflow-y-auto space-y-4">
+                    {conversationHistory.length === 0 && !transcription && (
+                      <p className="text-muted-foreground italic text-sm text-center pt-8">
+                           {isSessionActive ? "Listening..." : "Start a session to begin."}
+                      </p>
+                    )}
+                    {conversationHistory.map((msg, index) => (
+                      <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                        {msg.role === 'model' && <Bot className="h-6 w-6 flex-shrink-0 text-accent" />}
+                        <div className={`rounded-lg p-3 max-w-[85%] prose prose-sm dark:prose-invert ${msg.role === 'model' ? 'bg-muted' : 'bg-primary text-primary-foreground'}`}
+                             dangerouslySetInnerHTML={{ __html: msg.content }}
+                        />
+                        {msg.role === 'user' && <User className="h-6 w-6 flex-shrink-0 text-primary" />}
+                      </div>
+                    ))}
+                    {isLoading && (
+                      <div className="flex items-center space-x-2">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <p className="text-muted-foreground italic">Generating response...</p>
+                      </div>
+                    )}
+                     {transcription && (
+                       <div className="flex items-start gap-3 justify-end">
+                          <div className="rounded-lg p-3 max-w-[85%] bg-primary/80 text-primary-foreground italic">
+                            {transcription}
+                          </div>
+                          <User className="h-6 w-6 flex-shrink-0 text-primary" />
+                       </div>
+                    )}
                  </CardContent>
               </Card>
             </div>

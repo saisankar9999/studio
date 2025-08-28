@@ -5,13 +5,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Bot, User, Loader2, GripVertical, X } from 'lucide-react';
 
+interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
+}
+
 interface StealthModeOverlayProps {
   isOpen: boolean;
   onClose: () => void;
   isSessionActive: boolean;
   isLoading: boolean;
   transcription: string;
-  aiResponse: string;
+  conversationHistory: ChatMessage[];
 }
 
 export const StealthModeOverlay = ({
@@ -20,12 +25,20 @@ export const StealthModeOverlay = ({
   isSessionActive,
   isLoading,
   transcription,
-  aiResponse,
+  conversationHistory,
 }: StealthModeOverlayProps) => {
   const [position, setPosition] = useState({ x: 100, y: 100 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const overlayRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [conversationHistory, transcription]);
+
 
   const handleMouseDown = (e: React.MouseEvent) => {
     // Only drag from the header/drag-handle
@@ -93,30 +106,30 @@ export const StealthModeOverlay = ({
           <span className="sr-only">Close Overlay</span>
         </Button>
       </div>
-      <div className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
-        <div className="flex items-start gap-3 text-sm">
-          <User className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-          <p className="flex-1">
-            {transcription || (
-              <span className="text-muted-foreground italic">
-                {isSessionActive ? "Listening for question..." : "Session is not active."}
-              </span>
-            )}
+      <div ref={scrollRef} className="p-4 space-y-4 max-h-[400px] overflow-y-auto">
+        {conversationHistory.length === 0 && !transcription && (
+          <p className="text-muted-foreground italic text-sm text-center py-4">
+            {isSessionActive ? "Listening for question..." : "Session is not active."}
           </p>
-        </div>
-        <div className="flex items-start gap-3 text-sm">
-          <Bot className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            {isLoading && <Loader2 className="h-5 w-5 animate-spin text-accent" />}
-            {aiResponse && !isLoading && (
-              <div 
-                className="prose prose-sm dark:prose-invert max-w-none" 
-                dangerouslySetInnerHTML={{ __html: aiResponse }} 
-              />
-            )}
-            {!aiResponse && !isLoading && <p className="text-muted-foreground italic">AI response will appear here.</p>}
+        )}
+        {conversationHistory.map((msg, index) => (
+          <div key={index} className={`flex items-start gap-3 text-sm ${msg.role === 'user' ? 'justify-end' : ''}`}>
+            {msg.role === 'model' && <Bot className="h-5 w-5 text-accent flex-shrink-0 mt-0.5" />}
+            <div className={`rounded-lg p-2 max-w-[85%] prose prose-sm dark:prose-invert ${msg.role === 'model' ? 'bg-muted' : 'bg-primary text-primary-foreground'}`}
+                 dangerouslySetInnerHTML={{ __html: msg.content }}
+            />
+            {msg.role === 'user' && <User className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />}
           </div>
-        </div>
+        ))}
+        {isLoading && <Loader2 className="h-5 w-5 animate-spin text-accent" />}
+        {transcription && (
+           <div className="flex items-start gap-3 justify-end text-sm">
+              <div className="rounded-lg p-2 max-w-[85%] bg-primary/80 text-primary-foreground italic">
+                {transcription}
+              </div>
+              <User className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
+           </div>
+        )}
       </div>
     </div>
   );
