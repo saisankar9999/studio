@@ -243,8 +243,8 @@ function LivePageContent() {
     );
   }
 
-  if (stealthMode) {
-    return (
+  return (
+    <TooltipProvider>
       <StealthModeOverlay
         isOpen={stealthMode}
         onClose={() => setStealthMode(false)}
@@ -253,12 +253,8 @@ function LivePageContent() {
         transcription={transcription}
         aiResponse={aiResponse}
       />
-    );
-  }
-
-  return (
-    <TooltipProvider>
-      <div className="min-h-screen w-full bg-background text-foreground">
+      
+      <div className="min-h-screen w-full bg-background text-foreground" style={{ display: stealthMode ? 'none' : 'block' }}>
         <header className="border-b">
           <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-8">
             <h1 className="text-2xl font-bold">Live Co-pilot</h1>
