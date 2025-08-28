@@ -36,13 +36,30 @@ export type GenerateLiveResponseOutput = z.infer<typeof GenerateLiveResponseOutp
 export async function generateLiveResponse(
   input: GenerateLiveResponseInput
 ): Promise<GenerateLiveResponseOutput> {
-  return generateLiveResponseFlow(input);
+  // Pre-process history to add boolean flags for Handlebars
+  const processedHistory = input.conversationHistory?.map(msg => ({
+    ...msg,
+    isUser: msg.role === 'user',
+    isModel: msg.role === 'model',
+  }));
+
+  return generateLiveResponseFlow({ ...input, conversationHistory: processedHistory as any });
 }
 
 const prompt = ai.definePrompt({
   name: 'generateLiveResponsePrompt',
   input: {
-    schema: GenerateLiveResponseInputSchema
+    schema: z.object({
+      question: z.string(),
+      resume: z.string(),
+      jobDescription: z.string(),
+      conversationHistory: z.array(z.object({
+        role: z.enum(['user', 'model']),
+        content: z.string(),
+        isUser: z.boolean(),
+        isModel: z.boolean(),
+      })).optional(),
+    })
   },
   output: { schema: GenerateLiveResponseOutputSchema },
   prompt: `You are an expert career coach providing a suggested answer for a candidate in a live interview.
@@ -63,8 +80,8 @@ Job Description:
 CONVERSATION HISTORY (for context on follow-up questions):
 ---
 {{#each conversationHistory}}
-{{#if (eq this.role 'user')}}Interviewer: {{this.content}}{{/if}}
-{{#if (eq this.role 'model')}}Me (My Answer): {{this.content}}{{/if}}
+{{#if this.isUser}}Interviewer: {{this.content}}{{/if}}
+{{#if this.isModel}}Me (My Answer): {{this.content}}{{/if}}
 {{/each}}
 ---
 {{/if}}
@@ -78,7 +95,17 @@ Your Suggested Answer (as the candidate):`,
 const generateLiveResponseFlow = ai.defineFlow(
   {
     name: 'generateLiveResponseFlow',
-    inputSchema: GenerateLiveResponseInputSchema,
+    inputSchema: z.object({ // Corresponds to the prompt's input schema
+      question: z.string(),
+      resume: z.string(),
+      jobDescription: z.string(),
+      conversationHistory: z.array(z.object({
+        role: z.enum(['user', 'model']),
+        content: z.string(),
+        isUser: z.boolean(),
+        isModel: z.boolean(),
+      })).optional(),
+    }),
     outputSchema: GenerateLiveResponseOutputSchema,
   },
   async (input) => {
