@@ -11,6 +11,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { googleAI } from '@genkit-ai/googleai';
 
 // Define a schema for conversation history messages
 const ChatMessageSchema = z.object({
@@ -81,6 +82,7 @@ Most Recent Interviewer's Question:
 Your Suggested Answer (as the candidate):`,
 });
 
+// This flow is no longer used for streaming but is kept for potential non-streaming use cases.
 const generateLiveResponseFlow = ai.defineFlow(
   {
     name: 'generateLiveResponseFlow',
@@ -98,13 +100,18 @@ const generateLiveResponseFlow = ai.defineFlow(
 );
 
 
-// New Streaming Flow
+// New Streaming Flow - Corrected Implementation
 export async function generateLiveResponseStream(input: GenerateLiveResponseInput): Promise<ReadableStream<string>> {
+  
+  // 1. Compile the prompt to get the raw text to send to the model
+  const promptText = await prompt.compile(input);
+  
+  // 2. Use ai.generateStream with a model that supports it and the correct input format
   const { stream } = ai.generateStream({
-    model: 'googleai/gemini-2.0-flash',
-    prompt: prompt.compile(input), // Compile the prompt with the input
+    model: googleAI('gemini-2.0-flash'),
+    prompt: promptText, // Pass the compiled prompt text
     output: {
-      format: 'text',
+      format: 'text', // We want raw text for streaming
     },
   });
 
