@@ -232,6 +232,12 @@ function LivePageContent() {
     };
 
     recognition.onerror = (event: any) => {
+      // The "aborted" error is thrown when the user manually stops the recognition,
+      // which is expected behavior, so we can safely ignore it.
+      if (event.error === 'aborted') {
+        console.log('Speech recognition aborted by user.');
+        return;
+      }
       console.error('Speech recognition error:', event.error);
       toast({
         variant: "destructive",
