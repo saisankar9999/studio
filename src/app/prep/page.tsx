@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect, useRef } from 'react';
+import { useState, useTransition, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -15,6 +15,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { marked } from 'marked';
+import { configureFirebase } from '@/lib/firebase/firebase-client'; // Import client firebase
+import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+
 
 interface Profile {
   id: string;
@@ -58,7 +61,7 @@ export default function PrepRoomPage() {
             setJobDescription(profile.jobDescription);
             toast({
               title: `Profile "${profile.name}" Loaded`,
-              description: "You can now generate a prep plan.",
+              description: "You can now generate a prep plan or chat with the mentor.",
             });
           }
         }
@@ -67,6 +70,34 @@ export default function PrepRoomPage() {
       }
     }
   }, [searchParams, toast]);
+  
+  // Set up Firestore listener for conversation
+  useEffect(() => {
+    if (!profileId) return;
+
+    const { db } = configureFirebase();
+    if (!db) return;
+
+    const messagesRef = collection(db, 'prepConversations', profileId, 'messages');
+    const q = query(messagesRef, orderBy('timestamp'));
+
+    const unsubscribe = onSnapshot(q, async (querySnapshot) => {
+        const messages: ChatMessage[] = [];
+        for (const doc of querySnapshot.docs) {
+            const data = doc.data();
+            // The AI flow now returns markdown, so we need to parse it
+            const content = data.role === 'model' ? await marked(data.content) : data.content;
+            messages.push({ role: data.role, content });
+        }
+        setConversation(messages);
+    }, (error) => {
+        console.error("Error fetching conversation:", error);
+        toast({ title: "Could not load chat history.", variant: "destructive" });
+    });
+
+    return () => unsubscribe();
+  }, [profileId, toast]);
+
 
   useEffect(() => {
     // Scroll to bottom of chat
@@ -93,29 +124,28 @@ export default function PrepRoomPage() {
   };
 
   const handleAskQuestion = () => {
-    if (!userQuestion.trim()) return;
+    if (!userQuestion.trim() || !profileId) {
+      if (!profileId) {
+         toast({ title: 'No Profile Selected', description: 'Please go to the dashboard and select a profile.', variant: 'destructive' });
+      }
+      return;
+    };
 
-    const newConversation: ChatMessage[] = [...conversation, { role: 'user', content: userQuestion }];
-    setConversation(newConversation);
     const question = userQuestion;
     setUserQuestion('');
 
     startAnswerTransition(async () => {
       try {
-        const result = await generateInterviewResponse({
+        // The flow now handles saving the conversation, so we just call it.
+        await generateInterviewResponse({
           question,
           resume,
           jobDescription,
-          conversationHistory: newConversation.slice(-4) // Send last 4 messages for context
+          profileId,
         });
         
-        const htmlAnswer = await marked(result.answer);
-        setConversation(prev => [...prev, { role: 'model', content: htmlAnswer }]);
-
       } catch (error) {
         toast({ title: 'Error', description: 'The AI mentor could not respond. Please try again.', variant: 'destructive' });
-        // Restore conversation on error by removing the user's last message
-        setConversation(prev => prev.slice(0, -1));
       }
     });
   };
@@ -189,14 +219,18 @@ export default function PrepRoomPage() {
               <div className="space-y-4">
                 {conversation.length === 0 && (
                   <div className="text-center text-muted-foreground p-8">
-                    Start by asking a question below.
+                    { profileId ? "Your chat history will appear here. Start by asking a question." : "Please select a profile from the dashboard to start a conversation."}
                   </div>
                 )}
                 {conversation.map((msg, index) => (
                   <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'model' && <Bot className="h-6 w-6 flex-shrink-0 text-accent" />}
                     <div className={`rounded-lg p-3 max-w-[85%] ${msg.role === 'model' ? 'bg-muted' : 'bg-primary text-primary-foreground'}`}>
-                      <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: msg.content }}></div>
+                       {msg.role === 'user' ? (
+                          <p>{msg.content}</p>
+                        ) : (
+                          <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: msg.content }}></div>
+                        )}
                     </div>
                      {msg.role === 'user' && <User className="h-6 w-6 flex-shrink-0 text-primary" />}
                   </div>
@@ -216,9 +250,9 @@ export default function PrepRoomPage() {
                 onChange={(e) => setUserQuestion(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleAskQuestion()}
                 placeholder="Ask your mentor anything..."
-                disabled={isAnswering}
+                disabled={isAnswering || !profileId}
               />
-              <Button onClick={handleAskQuestion} disabled={isAnswering}>
+              <Button onClick={handleAskQuestion} disabled={isAnswering || !profileId}>
                 <Send />
               </Button>
             </div>

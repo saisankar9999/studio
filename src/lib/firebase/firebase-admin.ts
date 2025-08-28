@@ -1,6 +1,5 @@
-import { initializeApp, getApps, getApp, App } from 'firebase-admin/app';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import { credential } from 'firebase-admin';
+import { initializeApp, getApps, getApp, App, cert } from 'firebase-admin/app';
+import { getFirestore, Firestore, FieldValue } from 'firebase-admin/firestore';
 
 let app: App;
 let db: Firestore;
@@ -12,15 +11,15 @@ const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
 export function configureFirebase() {
   if (!serviceAccount) {
     console.warn(
-      'Firebase service account key not found. Firestore integration will be disabled.'
+      'Firebase service account key not found in environment variables. Firestore integration on the server will be disabled.'
     );
     // Return a dummy object if not configured
-    return { app: null, db: null };
+    return { app: null, db: null, firestore: null };
   }
 
   if (!getApps().length) {
     app = initializeApp({
-      credential: credential.cert(serviceAccount),
+      credential: cert(serviceAccount),
     });
     console.log('Firebase Admin initialized.');
   } else {
@@ -29,5 +28,5 @@ export function configureFirebase() {
 
   db = getFirestore(app);
 
-  return { app, db };
+  return { app, db, firestore: { FieldValue } };
 }
