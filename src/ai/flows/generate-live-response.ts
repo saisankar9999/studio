@@ -12,10 +12,19 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
+// Define a schema for conversation history messages
+const ChatMessageSchema = z.object({
+  role: z.enum(['user', 'model']),
+  content: z.string(),
+});
+type ChatMessage = z.infer<typeof ChatMessageSchema>;
+
+
 const GenerateLiveResponseInputSchema = z.object({
   question: z.string().describe("The interview question that was asked."),
   resume: z.string().describe("The candidate's resume text content."),
   jobDescription: z.string().describe('The job description for the role.'),
+  conversationHistory: z.array(ChatMessageSchema).optional().describe("History of the conversation so far, for context on follow-up questions."),
 });
 export type GenerateLiveResponseInput = z.infer<typeof GenerateLiveResponseInputSchema>;
 
@@ -27,8 +36,14 @@ export type GenerateLiveResponseOutput = z.infer<typeof GenerateLiveResponseOutp
 export async function generateLiveResponse(
   input: GenerateLiveResponseInput
 ): Promise<GenerateLiveResponseOutput> {
-  return generateLiveResponseFlow(input);
+  const { output } = await prompt(input);
+
+  if (!output) {
+    throw new Error('Failed to generate an answer from the AI model.');
+  }
+  return { answer: output.answer };
 }
+
 
 const prompt = ai.definePrompt({
   name: 'generateLiveResponsePrompt',
@@ -50,8 +65,17 @@ Job Description:
 ---
 {{{jobDescription}}}
 ---
+{{#if conversationHistory}}
+CONVERSATION HISTORY (for context on follow-up questions):
+---
+{{#each conversationHistory}}
+{{#if (eq this.role 'user')}}Interviewer: {{this.content}}{{/if}}
+{{#if (eq this.role 'model')}}Me (My Answer): {{this.content}}{{/if}}
+{{/each}}
+---
+{{/if}}
 
-Interviewer's Question:
+Most Recent Interviewer's Question:
 "{{{question}}}"
 
 Your Suggested Answer (as the candidate):`,
@@ -72,3 +96,17 @@ const generateLiveResponseFlow = ai.defineFlow(
     return { answer: output.answer };
   }
 );
+
+
+// New Streaming Flow
+export async function generateLiveResponseStream(input: GenerateLiveResponseInput): Promise<ReadableStream<string>> {
+  const { stream } = ai.generateStream({
+    model: 'googleai/gemini-2.0-flash',
+    prompt: prompt.compile(input), // Compile the prompt with the input
+    output: {
+      format: 'text',
+    },
+  });
+
+  return stream;
+}

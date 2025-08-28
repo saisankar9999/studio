@@ -3,7 +3,6 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { generateLiveResponse } from '@/ai/flows/generate-live-response';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mic, Square, Bot, User, Loader2, Video, Power, PowerOff } from 'lucide-react';
@@ -20,6 +19,11 @@ interface Profile {
   name: string;
   resume: string;
   jobDescription: string;
+}
+
+interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
 }
 
 interface SpeechRecognition extends EventTarget {
@@ -82,6 +86,8 @@ function LivePageContent() {
   const [isClient, setIsClient] = useState(false);
   const [stealthMode, setStealthMode] = useState(false);
 
+  const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
+
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const finalTranscriptRef = useRef<string>('');
@@ -131,26 +137,57 @@ function LivePageContent() {
     };
   }, [searchParams, toast]);
 
-  const handleGenerateResponse = useCallback(async (question: string) => {
+  const handleGenerateResponseStream = useCallback(async (question: string) => {
     if (!question) return;
+
     setIsLoading(true);
     setAiResponse('');
 
+    const currentHistory: ChatMessage[] = [...conversationHistory, { role: 'user', content: question }];
+    setConversationHistory(currentHistory);
+
     try {
-      const response = await generateLiveResponse({
-        question,
-        resume: resume || resumePlaceholder,
-        jobDescription: jobDescription || jobDescriptionPlaceholder,
+      const response = await fetch('/api/generate-live-stream', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          resume: resume || resumePlaceholder,
+          jobDescription: jobDescription || jobDescriptionPlaceholder,
+          conversationHistory: currentHistory,
+        }),
       });
-      const htmlAnswer = await marked(response.answer);
-      setAiResponse(htmlAnswer);
+
+      if (!response.ok || !response.body) {
+        throw new Error(`API error: ${response.statusText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullAnswer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        fullAnswer += chunk;
+        setAiResponse(prev => prev + chunk);
+      }
+      
+      const finalHtmlAnswer = await marked(fullAnswer);
+      setAiResponse(finalHtmlAnswer);
+      setConversationHistory(prev => [...prev, { role: 'model', content: fullAnswer }]);
+
     } catch (error) {
       console.error("Error generating AI response:", error);
       toast({ variant: "destructive", title: "AI Error", description: "Failed to generate a response." });
+      // Remove the user question from history if the call fails
+      setConversationHistory(prev => prev.slice(0, -1));
     } finally {
       setIsLoading(false);
     }
-  }, [resume, jobDescription, toast]);
+  }, [resume, jobDescription, toast, conversationHistory]);
 
   const handleToggleSession = () => {
     if (isSessionActive) {
@@ -181,6 +218,7 @@ function LivePageContent() {
       setAiResponse('');
       setTranscription('');
       finalTranscriptRef.current = '';
+      setConversationHistory([]); // Reset history for new session
     };
 
     recognition.onend = () => {
@@ -188,7 +226,7 @@ function LivePageContent() {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       // Process any remaining transcript
       if (finalTranscriptRef.current.trim() && !isLoading) {
-        handleGenerateResponse(finalTranscriptRef.current.trim());
+        handleGenerateResponseStream(finalTranscriptRef.current.trim());
         finalTranscriptRef.current = '';
       }
     };
@@ -227,7 +265,7 @@ function LivePageContent() {
         if (finalTranscriptRef.current.trim() && !isLoading) {
           const questionToProcess = finalTranscriptRef.current.trim();
           finalTranscriptRef.current = '';
-          handleGenerateResponse(questionToProcess);
+          handleGenerateResponseStream(questionToProcess);
         }
       }, 1500); // 1.5 seconds of silence triggers generation
     };
@@ -328,15 +366,15 @@ function LivePageContent() {
                 </CardHeader>
                  <CardContent className="pt-4">
                     <div className="w-full">
-                      {isLoading && (
+                      {isLoading && !aiResponse && (
                         <div className="flex items-center space-x-2">
                           <Loader2 className="h-5 w-5 animate-spin" />
                           <p className="text-muted-foreground italic">Generating response...</p>
                         </div>
                       )}
-                      {aiResponse && !isLoading && (
-                        <div key={aiResponse} className="prose prose-sm prose-p:text-foreground dark:prose-invert animate-in fade-in-50 duration-500">
-                           <div dangerouslySetInnerHTML={{ __html: aiResponse }}></div>
+                      {aiResponse && (
+                        <div key={aiResponse} className="prose prose-sm prose-p:text-foreground dark:prose-invert">
+                           <div dangerouslySetInnerHTML={{ __html: isLoading ? marked.parse(aiResponse) : aiResponse }}></div>
                         </div>
                       )}
                       {!aiResponse && !isLoading && (
