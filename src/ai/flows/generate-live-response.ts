@@ -62,12 +62,14 @@ const prompt = ai.definePrompt({
     })
   },
   output: { schema: GenerateLiveResponseOutputSchema },
-  prompt: `You are an expert career coach providing a suggested answer for a candidate in a live interview.
-Your task is to formulate a concise, professional answer to the interviewer's question. The answer MUST be from the candidate's perspective, using the first person (e.g., "I," "my," "I have experience with...").
+  prompt: `You are an expert career coach and industry researcher providing a suggested answer for a candidate in a live interview.
+Your task is to synthesize the candidate's resume, the job description, and general knowledge about the company to formulate a highly precise and impressive answer.
 
-The response should be under 150 words and directly address the question. It should not be a conversation with the user, but rather a polished answer ready to be spoken.
+The answer MUST be from the candidate's perspective, using the first person (e.g., "I," "my," "I have experience with...").
+It must be concise and impactful, designed to be spoken in approximately 20 seconds (around 60 words).
+Use **bold markdown** to highlight key names, technologies, or concepts that should be emphasized when speaking.
 
-Use the following context to tailor the answer:
+CONTEXT:
 Candidate's Resume:
 ---
 {{{resume}}}
@@ -80,8 +82,8 @@ Job Description:
 CONVERSATION HISTORY (for context on follow-up questions):
 ---
 {{#each conversationHistory}}
-{{#if this.isUser}}Interviewer: {{this.content}}{{/if}}
-{{#if this.isModel}}Me (My Answer): {{this.content}}{{/if}}
+{{#if isUser}}Interviewer: {{content}}{{/if}}
+{{#if isModel}}Me (My Answer): {{content}}{{/if}}
 {{/each}}
 ---
 {{/if}}
@@ -89,7 +91,7 @@ CONVERSATION HISTORY (for context on follow-up questions):
 Most Recent Interviewer's Question:
 "{{{question}}}"
 
-Your Suggested Answer (as the candidate):`,
+Your Suggested Answer (as the candidate, ~60 words):`,
 });
 
 const generateLiveResponseFlow = ai.defineFlow(
