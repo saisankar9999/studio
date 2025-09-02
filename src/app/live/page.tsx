@@ -5,9 +5,10 @@ import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mic, Square, Bot, User, Loader2, Video, Power, PowerOff } from 'lucide-react';
+import { Mic, Square, Bot, User, Loader2, Video, Power, PowerOff, AudioLines } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { generateLiveResponse } from '@/ai/flows/generate-live-response';
+import { transcribeAudio } from '@/ai/flows/transcribe-audio';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StealthModeOverlay } from '@/components/common/StealthModeOverlay';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -25,26 +26,6 @@ interface Profile {
 interface ChatMessage {
   role: 'user' | 'model';
   content: string;
-}
-
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  onstart: () => void;
-  onend: () => void;
-  onerror: (event: any) => void;
-  onresult: (event: any) => void;
-  start: () => void;
-  stop: () => void;
-  new(): SpeechRecognition;
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: SpeechRecognition;
-    webkitSpeechRecognition: SpeechRecognition;
-  }
 }
 
 const resumePlaceholder = `John Doe
@@ -82,17 +63,20 @@ function LivePageContent() {
   const [jobDescription, setJobDescription] = useState('');
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [transcription, setTranscription] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [stealthMode, setStealthMode] = useState(false);
 
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
 
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const finalTranscriptRef = useRef<string>('');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   
   const { toast } = useToast();
+  
+  const isLoading = isTranscribing || isGenerating;
 
   useEffect(() => {
     setIsClient(true);
@@ -132,15 +116,25 @@ function LivePageContent() {
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      recognitionRef.current?.stop();
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      mediaRecorderRef.current?.stop();
     };
   }, [searchParams, toast]);
+  
+  const handleToggleSession = () => {
+    if (isSessionActive) {
+      stopRecording();
+      setIsSessionActive(false);
+      setConversationHistory([]);
+    } else {
+      setIsSessionActive(true);
+      setConversationHistory([]);
+    }
+  };
 
   const handleGenerateResponse = useCallback(async (question: string) => {
     if (!question) return;
 
-    setIsLoading(true);
+    setIsGenerating(true);
     const currentHistory: ChatMessage[] = [...conversationHistory, { role: 'user', content: question }];
     setConversationHistory(currentHistory);
 
@@ -158,101 +152,63 @@ function LivePageContent() {
     } catch (error) {
       console.error("Error generating AI response:", error);
       toast({ variant: "destructive", title: "AI Error", description: "Failed to generate a response." });
-      // Remove the user question from history if the call fails
       setConversationHistory(prev => prev.slice(0, -1));
     } finally {
-      setIsLoading(false);
+      setIsGenerating(false);
     }
   }, [resume, jobDescription, toast, conversationHistory]);
-
-  const handleToggleSession = () => {
-    if (isSessionActive) {
-      recognitionRef.current?.stop();
-      setIsSessionActive(false);
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      toast({
-        variant: "destructive",
-        title: "Unsupported Browser",
-        description: "Speech recognition is not supported in your browser.",
-      });
-      return;
-    }
-    
-    recognitionRef.current = new SpeechRecognition();
-    const recognition = recognitionRef.current;
-    
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsSessionActive(true);
-      setTranscription('');
-      finalTranscriptRef.current = '';
-      setConversationHistory([]); // Reset history for new session
-    };
-
-    recognition.onend = () => {
-      setIsSessionActive(false);
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      // Process any remaining transcript
-      if (finalTranscriptRef.current.trim() && !isLoading) {
-        handleGenerateResponse(finalTranscriptRef.current.trim());
-        finalTranscriptRef.current = '';
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-       if (event.error === 'aborted') {
-        console.log('Speech recognition aborted by user.');
-        return;
-      }
-      console.error('Speech recognition error:', event.error);
-      toast({
-        variant: "destructive",
-        title: "Speech Recognition Error",
-        description: event.error === 'not-allowed' ? 'Microphone access was denied.' : 'An error occurred.',
-      });
-      setIsSessionActive(false);
-    };
-
-    recognition.onresult = (event: any) => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-
-      let interimTranscript = '';
-      let finalTranscript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript + ' ';
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-
-      if (finalTranscript) {
-        finalTranscriptRef.current += finalTranscript;
-      }
-      
-      setTranscription(finalTranscriptRef.current + interimTranscript);
-
-      silenceTimerRef.current = setTimeout(() => {
-        if (finalTranscriptRef.current.trim() && !isLoading) {
-          const questionToProcess = finalTranscriptRef.current.trim();
-          finalTranscriptRef.current = '';
-          setTranscription(''); // Clear the live transcription view
-          handleGenerateResponse(questionToProcess);
-        }
-      }, 1500); // 1.5 seconds of silence triggers generation
-    };
-
-    recognition.start();
-  };
   
+  const startRecording = async () => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorderRef.current = new MediaRecorder(stream);
+        audioChunksRef.current = [];
+        
+        mediaRecorderRef.current.ondataavailable = (event) => {
+            audioChunksRef.current.push(event.data);
+        };
+        
+        mediaRecorderRef.current.onstop = async () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            stream.getTracks().forEach(track => track.stop()); // Turn off mic indicator
+            
+            setIsTranscribing(true);
+            setTranscription('');
+            
+            const reader = new FileReader();
+            reader.readAsDataURL(audioBlob);
+            reader.onloadend = async () => {
+                const base64Audio = reader.result as string;
+                try {
+                    const { text } = await transcribeAudio({ audioDataUri: base64Audio });
+                    if (text) {
+                        setTranscription(text);
+                        handleGenerateResponse(text);
+                    } else {
+                        toast({ variant: 'destructive', title: 'Transcription Failed', description: 'Could not understand audio.' });
+                    }
+                } catch (error) {
+                    toast({ variant: 'destructive', title: 'Transcription Error', description: 'Failed to process audio.' });
+                } finally {
+                    setIsTranscribing(false);
+                }
+            };
+        };
+
+        mediaRecorderRef.current.start();
+        setIsRecording(true);
+    } catch (error) {
+        toast({ title: 'Microphone Access Denied', description: 'Please enable microphone permissions.', variant: 'destructive' });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+    }
+  };
+
   if (!isClient) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -300,17 +256,28 @@ function LivePageContent() {
               <Card>
                 <CardHeader>
                   <CardTitle>Controls</CardTitle>
-                  <CardDescription>Start the session to begin real-time transcription and assistance.</CardDescription>
+                  <CardDescription>Start the session, then record questions as they are asked.</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
                   <Alert variant={isSessionActive ? 'default' : 'destructive'}>
                     <AlertTitle>
-                      {isSessionActive ? 'Session Active: Listening' : 'Session Inactive'}
+                      {isSessionActive ? 'Session Active' : 'Session Inactive'}
                     </AlertTitle>
                     <AlertDescription>
-                       {isSessionActive ? 'The co-pilot is actively listening for questions.' : 'Click "Start Session" to begin.'}
+                       {isSessionActive ? 'Ready to record the interviewer\'s questions.' : 'Click "Start Session" to begin.'}
                     </AlertDescription>
                   </Alert>
+                   <div className="flex items-center justify-center p-4 rounded-lg bg-muted">
+                    {isRecording ? (
+                        <Button onClick={stopRecording} size="lg" variant="destructive" className="w-full">
+                            <Square className="mr-2 h-5 w-5" /> Stop Recording
+                        </Button>
+                    ) : (
+                        <Button onClick={startRecording} size="lg" className="w-full" disabled={!isSessionActive || isLoading}>
+                            <Mic className="mr-2 h-5 w-5" /> Record Question
+                        </Button>
+                    )}
+                   </div>
                 </CardContent>
                 <CardFooter>
                   <Button onClick={handleToggleSession} size="lg" className="w-full" variant={isSessionActive ? "destructive" : "default"}>
@@ -330,9 +297,9 @@ function LivePageContent() {
                   </CardTitle>
                 </CardHeader>
                  <CardContent className="pt-4 h-[400px] overflow-y-auto space-y-4">
-                    {conversationHistory.length === 0 && !transcription && (
+                    {conversationHistory.length === 0 && !isRecording && !isLoading && (
                       <p className="text-muted-foreground italic text-sm text-center pt-8">
-                           {isSessionActive ? "Listening..." : "Start a session to begin."}
+                           {isSessionActive ? "Waiting to record question..." : "Start a session to begin."}
                       </p>
                     )}
                     {conversationHistory.map((msg, index) => (
@@ -344,19 +311,23 @@ function LivePageContent() {
                         {msg.role === 'user' && <User className="h-6 w-6 flex-shrink-0 text-primary" />}
                       </div>
                     ))}
-                    {isLoading && (
+                     {isRecording && (
+                       <div className="flex items-center space-x-2 text-primary">
+                          <AudioLines className="h-5 w-5 animate-pulse" />
+                          <p className="italic">Recording question...</p>
+                       </div>
+                    )}
+                    {isTranscribing && (
+                      <div className="flex items-center space-x-2">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <p className="text-muted-foreground italic">Transcribing audio...</p>
+                      </div>
+                    )}
+                    {isGenerating && !isTranscribing && (
                       <div className="flex items-center space-x-2">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         <p className="text-muted-foreground italic">Generating response...</p>
                       </div>
-                    )}
-                     {transcription && (
-                       <div className="flex items-start gap-3 justify-end">
-                          <div className="rounded-lg p-3 max-w-[85%] bg-primary/80 text-primary-foreground italic">
-                            {transcription}
-                          </div>
-                          <User className="h-6 w-6 flex-shrink-0 text-primary" />
-                       </div>
                     )}
                  </CardContent>
               </Card>
