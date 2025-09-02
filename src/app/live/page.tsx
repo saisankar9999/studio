@@ -8,7 +8,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Mic, Square, Bot, User, Loader2, Video, Power, PowerOff, AudioLines } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { generateLiveResponse } from '@/ai/flows/generate-live-response';
-import { transcribeAudio } from '@/ai/flows/transcribe-audio';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StealthModeOverlay } from '@/components/common/StealthModeOverlay';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -62,21 +61,19 @@ function LivePageContent() {
   const [resume, setResume] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const [transcription, setTranscription] = useState('');
-  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [stealthMode, setStealthMode] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState('');
 
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<any>(null);
   
   const { toast } = useToast();
   
-  const isLoading = isTranscribing || isGenerating;
+  const isLoading = isGenerating;
 
   useEffect(() => {
     setIsClient(true);
@@ -114,9 +111,18 @@ function LivePageContent() {
     };
     window.addEventListener('keydown', handleKeyDown);
 
+    // Setup Speech Recognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognitionRef.current = recognition;
+    }
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      mediaRecorderRef.current?.stop();
+      recognitionRef.current?.stop();
     };
   }, [searchParams, toast]);
   
@@ -152,60 +158,70 @@ function LivePageContent() {
     } catch (error) {
       console.error("Error generating AI response:", error);
       toast({ variant: "destructive", title: "AI Error", description: "Failed to generate a response." });
-      setConversationHistory(prev => prev.slice(0, -1));
+      setConversationHistory(prev => prev.slice(0, -1)); // Remove the user's question if AI fails
     } finally {
       setIsGenerating(false);
     }
   }, [resume, jobDescription, toast, conversationHistory]);
   
-  const startRecording = async () => {
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorderRef.current = new MediaRecorder(stream);
-        audioChunksRef.current = [];
-        
-        mediaRecorderRef.current.ondataavailable = (event) => {
-            audioChunksRef.current.push(event.data);
-        };
-        
-        mediaRecorderRef.current.onstop = async () => {
-            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-            stream.getTracks().forEach(track => track.stop()); // Turn off mic indicator
-            
-            setIsTranscribing(true);
-            setTranscription('');
-            
-            const reader = new FileReader();
-            reader.readAsDataURL(audioBlob);
-            reader.onloadend = async () => {
-                const base64Audio = reader.result as string;
-                try {
-                    const { text } = await transcribeAudio({ audioDataUri: base64Audio });
-                    if (text) {
-                        setTranscription(text);
-                        handleGenerateResponse(text);
-                    } else {
-                        toast({ variant: 'destructive', title: 'Transcription Failed', description: 'Could not understand audio.' });
-                    }
-                } catch (error) {
-                    toast({ variant: 'destructive', title: 'Transcription Error', description: 'Failed to process audio.' });
-                } finally {
-                    setIsTranscribing(false);
-                }
-            };
-        };
-
-        mediaRecorderRef.current.start();
-        setIsRecording(true);
-    } catch (error) {
-        toast({ title: 'Microphone Access Denied', description: 'Please enable microphone permissions.', variant: 'destructive' });
+  const startRecording = () => {
+    if (!recognitionRef.current) {
+      toast({ title: 'Speech Recognition Not Supported', description: 'Please use a different browser like Chrome.', variant: 'destructive' });
+      return;
     }
+
+    const recognition = recognitionRef.current;
+    
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      setLiveTranscript(interimTranscript);
+
+      if (finalTranscript.trim()) {
+        handleGenerateResponse(finalTranscript.trim());
+        setLiveTranscript('');
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      // Ignore the 'aborted' error which happens on manual stop
+      if (event.error === 'aborted') {
+        return;
+      }
+      console.error('Speech recognition error:', event.error);
+      toast({
+        variant: "destructive",
+        title: "Speech Recognition Error",
+        description: `Error: ${event.error}. The service may have stopped. Try recording again.`,
+      });
+      setIsRecording(false);
+    };
+    
+    recognition.onend = () => {
+      // The service can sometimes stop on its own.
+      // If we are still supposed to be in a recording state, restart it.
+      if (isRecording && isSessionActive) {
+        recognition.start();
+      }
+    };
+
+    recognition.start();
+    setIsRecording(true);
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-        mediaRecorderRef.current.stop();
+    if (recognitionRef.current && isRecording) {
+        recognitionRef.current.stop();
         setIsRecording(false);
+        setLiveTranscript('');
     }
   };
 
@@ -225,7 +241,7 @@ function LivePageContent() {
         isSessionActive={isSessionActive}
         isLoading={isLoading}
         conversationHistory={conversationHistory}
-        transcription={transcription}
+        transcription={liveTranscript}
       />
       
       <div className="min-h-screen w-full bg-background text-foreground" style={{ display: stealthMode ? 'none' : 'block' }}>
@@ -314,19 +330,15 @@ function LivePageContent() {
                      {isRecording && (
                        <div className="flex items-center space-x-2 text-primary">
                           <AudioLines className="h-5 w-5 animate-pulse" />
-                          <p className="italic">Recording question...</p>
+                          <p className="italic">{liveTranscript || 'Listening...'}</p>
                        </div>
                     )}
-                    {isTranscribing && (
-                      <div className="flex items-center space-x-2">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        <p className="text-muted-foreground italic">Transcribing audio...</p>
-                      </div>
-                    )}
-                    {isGenerating && !isTranscribing && (
-                      <div className="flex items-center space-x-2">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        <p className="text-muted-foreground italic">Generating response...</p>
+                    {isGenerating && (
+                      <div className="flex items-start gap-3">
+                        <Bot className="h-6 w-6 flex-shrink-0 text-accent" />
+                        <div className="p-3 bg-muted rounded-lg">
+                           <Loader2 className="h-5 w-5 animate-spin" />
+                        </div>
                       </div>
                     )}
                  </CardContent>
@@ -350,5 +362,3 @@ export default function LivePage() {
     </Suspense>
   );
 }
-
-    
