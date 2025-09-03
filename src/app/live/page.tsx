@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mic, Square, Bot, User, Loader2, Video, Power, PowerOff, AudioLines } from 'lucide-react';
+import { Mic, Square, Bot, User, Loader2, Video, Power, PowerOff, AudioLines, Monitor, MonitorOff } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { generateLiveResponse } from '@/ai/flows/generate-live-response';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -66,6 +66,9 @@ function LivePageContent() {
   const [isClient, setIsClient] = useState(false);
   const [stealthMode, setStealthMode] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
+  const [isSharingScreen, setIsSharingScreen] = useState(false);
+  const screenShareStreamRef = useRef<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
 
@@ -225,6 +228,39 @@ function LivePageContent() {
     }
   };
 
+  const handleToggleScreenShare = async () => {
+    if (isSharingScreen) {
+      screenShareStreamRef.current?.getTracks().forEach(track => track.stop());
+      screenShareStreamRef.current = null;
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      setIsSharingScreen(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: false, // Typically you don't want to capture audio from the screen share
+        });
+        screenShareStreamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        stream.getVideoTracks()[0].onended = () => {
+          setIsSharingScreen(false);
+        };
+        setIsSharingScreen(true);
+      } catch (error) {
+        console.error("Error starting screen share:", error);
+        toast({
+          title: "Screen Share Failed",
+          description: "Could not start screen sharing. Please check browser permissions.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   if (!isClient) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -271,6 +307,25 @@ function LivePageContent() {
             <div className="space-y-4">
               <Card>
                 <CardHeader>
+                  <CardTitle>Screen Share</CardTitle>
+                  <CardDescription>Display your interview window (e.g., Zoom, Teams) here.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="aspect-video w-full bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+                    <video ref={videoRef} autoPlay className={`w-full h-full object-contain ${!isSharingScreen ? 'hidden' : ''}`} />
+                    {!isSharingScreen && <Monitor className="h-16 w-16 text-muted-foreground" />}
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button onClick={handleToggleScreenShare} className="w-full" variant={isSharingScreen ? "secondary" : "default"}>
+                    {isSharingScreen ? <MonitorOff /> : <Monitor />}
+                    {isSharingScreen ? 'Stop Sharing' : 'Start Screen Share'}
+                  </Button>
+                </CardFooter>
+              </Card>
+
+              <Card>
+                <CardHeader>
                   <CardTitle>Controls</CardTitle>
                   <CardDescription>Start the session, then record questions as they are asked.</CardDescription>
                 </CardHeader>
@@ -312,7 +367,7 @@ function LivePageContent() {
                     Interview Conversation
                   </CardTitle>
                 </CardHeader>
-                 <CardContent className="pt-4 h-[400px] overflow-y-auto space-y-4">
+                 <CardContent className="pt-4 h-[600px] overflow-y-auto space-y-4">
                     {conversationHistory.length === 0 && !isRecording && !isLoading && (
                       <p className="text-muted-foreground italic text-sm text-center pt-8">
                            {isSessionActive ? "Waiting to record question..." : "Start a session to begin."}
