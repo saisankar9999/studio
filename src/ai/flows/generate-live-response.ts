@@ -36,14 +36,7 @@ export type GenerateLiveResponseOutput = z.infer<typeof GenerateLiveResponseOutp
 export async function generateLiveResponse(
   input: GenerateLiveResponseInput
 ): Promise<GenerateLiveResponseOutput> {
-  // Pre-process history to add boolean flags for Handlebars
-  const processedHistory = input.conversationHistory?.map(msg => ({
-    ...msg,
-    isUser: msg.role === 'user',
-    isModel: msg.role === 'model',
-  }));
-
-  return generateLiveResponseFlow({ ...input, conversationHistory: processedHistory as any });
+  return generateLiveResponseFlow(input);
 }
 
 const prompt = ai.definePrompt({
@@ -53,12 +46,8 @@ const prompt = ai.definePrompt({
       question: z.string(),
       resume: z.string(),
       jobDescription: z.string(),
-      conversationHistory: z.array(z.object({
-        role: z.enum(['user', 'model']),
-        content: z.string(),
-        isUser: z.boolean(),
-        isModel: z.boolean(),
-      })).optional(),
+      // The prompt input accepts the raw history
+      conversationHistory: z.array(ChatMessageSchema).optional(),
     })
   },
   output: { schema: GenerateLiveResponseOutputSchema },
@@ -82,8 +71,8 @@ Job Description:
 CONVERSATION HISTORY (for context on follow-up questions):
 ---
 {{#each conversationHistory}}
-{{#if isUser}}Interviewer: {{content}}{{/if}}
-{{#if isModel}}Me (My Answer): {{content}}{{/if}}
+{{#if (eq this.role 'user')}}Interviewer: {{this.content}}{{/if}}
+{{#if (eq this.role 'model')}}Me (My Answer): {{this.content}}{{/if}}
 {{/each}}
 ---
 {{/if}}
@@ -97,20 +86,11 @@ Your Suggested Answer (as the candidate, ~60 words):`,
 const generateLiveResponseFlow = ai.defineFlow(
   {
     name: 'generateLiveResponseFlow',
-    inputSchema: z.object({ // Corresponds to the prompt's input schema
-      question: z.string(),
-      resume: z.string(),
-      jobDescription: z.string(),
-      conversationHistory: z.array(z.object({
-        role: z.enum(['user', 'model']),
-        content: z.string(),
-        isUser: z.boolean(),
-        isModel: z.boolean(),
-      })).optional(),
-    }),
+    inputSchema: GenerateLiveResponseInputSchema,
     outputSchema: GenerateLiveResponseOutputSchema,
   },
   async (input) => {
+    // The flow receives the clean input, which matches the schema.
     const { output } = await prompt(input);
 
     if (!output) {

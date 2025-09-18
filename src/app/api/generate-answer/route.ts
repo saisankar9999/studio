@@ -1,10 +1,9 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { generateInterviewResponse } from '@/ai/flows/generate-interview-response';
+import { generateLiveResponse } from '@/ai/flows/generate-live-response';
 
 const generateAnswerRequest = z.object({
-  transcription: z.string(),
+  question: z.string(),
   resume: z.string(),
   jobDescription: z.string(),
 });
@@ -16,13 +15,12 @@ export async function POST(request: NextRequest) {
     if (!validation.success) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
-    const { transcription, resume, jobDescription } = validation.data;
+    const { question, resume, jobDescription } = validation.data;
 
-    // Use the correct Genkit flow
-    const { answer } = await generateInterviewResponse({
-        transcription,
-        resume,
-        jobDescription,
+    const { answer } = await generateLiveResponse({
+      question,
+      resume,
+      jobDescription,
     });
 
     return NextResponse.json({ answer });
@@ -32,5 +30,3 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Failed to generate answer: ${errorMessage}` }, { status: 500 });
   }
 }
-
-    
