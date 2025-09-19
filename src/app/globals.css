@@ -4,40 +4,31 @@
 
 @layer base {
   :root {
-    --background: 0 0% 2%; /* True black for background */
-    --foreground: 210 40% 98%; /* Soft white */
-    
-    --card: 220 13% 10%; /* Slightly lighter than background */
-    --card-foreground: 210 40% 98%;
-    
-    --popover: 0 0% 2%;
-    --popover-foreground: 210 40% 98%;
-    
-    --primary: 260 85% 65%; /* Vibrant purple */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 260 85% 65%;
     --primary-foreground: 210 40% 98%;
-    
-    --secondary: 217 33% 25%; /* Muted blue */
-    --secondary-foreground: 210 40% 98%;
-    
-    --muted: 217 33% 20%;
-    --muted-foreground: 215 20% 65%;
-    
-    --accent: 330 85% 60%; /* Bright pink/magenta for accents */
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 330 85% 60%;
     --accent-foreground: 210 40% 98%;
-    
-    --destructive: 0 72% 51%; /* Strong red */
+    --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    
-    --border: 217 33% 25%;
-    --input: 217 33% 25%;
-    --ring: 260 85% 65%;
-    
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --radius: 0.5rem;
   }
 
   .dark {
