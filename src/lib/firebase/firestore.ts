@@ -8,7 +8,8 @@ import {
   query,
   orderBy,
   limit,
-  serverTimestamp
+  serverTimestamp,
+  setDoc,
 } from 'firebase/firestore';
 import { configureFirebase } from './firebase-client';
 
@@ -17,6 +18,28 @@ interface ProfileData {
   resume: string;
   jobDescription: string;
 }
+
+interface UserData {
+    id: string;
+    email: string;
+    name?: string | null;
+    image?: string | null;
+}
+
+// Function to create or update a user document in Firestore
+export async function upsertUser(userData: UserData) {
+  const { db } = configureFirebase();
+  if (!db) throw new Error('Firestore is not initialized.');
+
+  const userDocRef = doc(db, 'users', userData.id);
+  await setDoc(userDocRef, {
+      email: userData.email,
+      name: userData.name,
+      image: userData.image,
+      lastLogin: serverTimestamp(),
+  }, { merge: true }); // Use merge to avoid overwriting existing fields
+}
+
 
 // Function to add a profile to a user's collection
 export async function addProfile(userId: string, profileData: ProfileData) {

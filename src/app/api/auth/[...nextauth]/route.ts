@@ -1,11 +1,12 @@
 
-import NextAuth, { type NextAuthOptions } from 'next-auth';
+import NextAuth, { type NextAuthOptions, type User } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import GoogleProvider from 'next-auth/providers/google';
 import {
   signInWithEmail,
   createUserWithEmail,
 } from '@/lib/firebase/auth';
+import { upsertUser } from '@/lib/firebase/firestore';
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -55,6 +56,18 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   callbacks: {
+     async signIn({ user, account }) {
+      if (account?.provider === 'google' && user.email && user.id) {
+        // For Google sign-in, save user data to Firestore
+        await upsertUser({
+          id: user.id,
+          email: user.email,
+          name: user.name ?? 'Anonymous',
+          image: user.image,
+        });
+      }
+      return true;
+    },
     async jwt({ token, user, account }) {
       if (user) {
         token.id = user.id;
