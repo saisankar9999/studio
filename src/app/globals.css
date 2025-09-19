@@ -4,40 +4,50 @@
 
 @layer base {
   :root {
-    --background: 220 13% 96%;
-    --foreground: 231 20% 15%;
-    --card: 0 0% 100%;
-    --card-foreground: 231 20% 15%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 231 20% 15%;
-    --primary: 231 48% 48%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 13% 91%;
-    --secondary-foreground: 231 20% 25%;
-    --muted: 220 13% 91%;
-    --muted-foreground: 231 20% 45%;
-    --accent: 180 100% 25.1%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 220 13% 89%;
-    --input: 220 13% 89%;
-    --ring: 231 48% 48%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.5rem;
-  }
-  .dark {
-    --background: 220 14% 10%; /* A bit lighter than pure black for depth */
+    --background: 0 0% 2%; /* True black for background */
     --foreground: 210 40% 98%; /* Soft white */
     
-    --card: 220 13% 15%; /* Slightly lighter than background */
+    --card: 220 13% 10%; /* Slightly lighter than background */
     --card-foreground: 210 40% 98%;
     
-    --popover: 220 14% 10%;
+    --popover: 0 0% 2%;
+    --popover-foreground: 210 40% 98%;
+    
+    --primary: 260 85% 65%; /* Vibrant purple */
+    --primary-foreground: 210 40% 98%;
+    
+    --secondary: 217 33% 25%; /* Muted blue */
+    --secondary-foreground: 210 40% 98%;
+    
+    --muted: 217 33% 20%;
+    --muted-foreground: 215 20% 65%;
+    
+    --accent: 330 85% 60%; /* Bright pink/magenta for accents */
+    --accent-foreground: 210 40% 98%;
+    
+    --destructive: 0 72% 51%; /* Strong red */
+    --destructive-foreground: 210 40% 98%;
+    
+    --border: 217 33% 25%;
+    --input: 217 33% 25%;
+    --ring: 260 85% 65%;
+    
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 0 0% 2%; /* True black for background */
+    --foreground: 210 40% 98%; /* Soft white */
+    
+    --card: 220 13% 10%; /* Slightly lighter than background */
+    --card-foreground: 210 40% 98%;
+    
+    --popover: 0 0% 2%;
     --popover-foreground: 210 40% 98%;
     
     --primary: 260 85% 65%; /* Vibrant purple */

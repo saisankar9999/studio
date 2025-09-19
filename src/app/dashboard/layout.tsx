@@ -10,5 +10,5 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <div className="dark">{children}</div>;
+  return <div>{children}</div>;
 }
