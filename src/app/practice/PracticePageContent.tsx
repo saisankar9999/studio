@@ -23,6 +23,8 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import type { GenerateInterviewQuestionsOutput } from '@/ai/flows/generate-interview-questions';
 import { generateQuestionsAction } from './actions';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useSession } from 'next-auth/react';
+import { getUserProfiles } from '@/lib/firebase/firestore';
 
 interface Profile {
   id: string;
@@ -35,6 +37,7 @@ export default function PracticePageContent() {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const [isPending, startTransition] = useTransition();
 
   const [resumeContent, setResumeContent] = useState('');
@@ -44,11 +47,10 @@ export default function PracticePageContent() {
 
   useEffect(() => {
     const profileId = searchParams.get('profile');
-    if (profileId) {
-      try {
-        const savedProfiles = localStorage.getItem('interviewProfiles');
-        if (savedProfiles) {
-          const profiles: Profile[] = JSON.parse(savedProfiles);
+    async function loadProfile() {
+      if (profileId && session?.user?.id) {
+        try {
+          const profiles = await getUserProfiles(session.user.id);
           const profile = profiles.find(p => p.id === profileId);
           if (profile) {
             setResumeContent(profile.resume);
@@ -58,15 +60,17 @@ export default function PracticePageContent() {
               description: "You can now generate questions.",
             });
           }
+        } catch (error) {
+          toast({
+            title: 'Error loading profile',
+            description: "Could not fetch profiles from the database.",
+            variant: 'destructive',
+          });
         }
-      } catch (error) {
-        toast({
-          title: 'Error loading profile',
-          variant: 'destructive',
-        });
       }
     }
-  }, [searchParams, toast]);
+    loadProfile();
+  }, [searchParams, toast, session]);
 
 
   const handleGenerateClick = () => {
@@ -121,6 +125,8 @@ export default function PracticePageContent() {
       return;
     }
     try {
+      // We still use local storage here to pass large data between pages
+      // to avoid complex URL state.
       localStorage.setItem(
         'interviewData',
         JSON.stringify({

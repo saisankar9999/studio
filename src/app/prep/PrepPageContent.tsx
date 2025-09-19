@@ -17,6 +17,8 @@ import { Separator } from '@/components/ui/separator';
 import { marked } from 'marked';
 import { configureFirebase } from '@/lib/firebase/firebase-client'; // Import client firebase
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { useSession } from 'next-auth/react';
+import { getUserProfiles } from '@/lib/firebase/firestore';
 
 
 interface Profile {
@@ -34,6 +36,7 @@ type ChatMessage = {
 export default function PrepPageContent() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const [isGeneratingPlan, startPlanTransition] = useTransition();
   const [isAnswering, startAnswerTransition] = useTransition();
 
@@ -49,12 +52,12 @@ export default function PrepPageContent() {
 
   useEffect(() => {
     const id = searchParams.get('profile');
-    if (id) {
-      setProfileId(id);
-      try {
-        const savedProfiles = localStorage.getItem('interviewProfiles');
-        if (savedProfiles) {
-          const profiles: Profile[] = JSON.parse(savedProfiles);
+    setProfileId(id);
+
+    async function loadProfile() {
+      if (id && session?.user?.id) {
+        try {
+          const profiles = await getUserProfiles(session.user.id);
           const profile = profiles.find(p => p.id === id);
           if (profile) {
             setResume(profile.resume);
@@ -64,12 +67,13 @@ export default function PrepPageContent() {
               description: "You can now generate a prep plan or chat with the mentor.",
             });
           }
+        } catch (error) {
+          toast({ title: 'Error loading profile from DB', variant: 'destructive' });
         }
-      } catch (error) {
-        toast({ title: 'Error loading profile', variant: 'destructive' });
       }
     }
-  }, [searchParams, toast]);
+    loadProfile();
+  }, [searchParams, toast, session]);
   
   // Set up Firestore listener for conversation
   useEffect(() => {

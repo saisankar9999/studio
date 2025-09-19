@@ -6,9 +6,9 @@ import {
   deleteDoc,
   doc,
   query,
-  where,
   orderBy,
   limit,
+  serverTimestamp
 } from 'firebase/firestore';
 import { configureFirebase } from './firebase-client';
 
@@ -26,7 +26,7 @@ export async function addProfile(userId: string, profileData: ProfileData) {
   const profilesCollectionRef = collection(db, 'users', userId, 'profiles');
   const docRef = await addDoc(profilesCollectionRef, {
     ...profileData,
-    createdAt: new Date(),
+    createdAt: serverTimestamp(),
   });
 
   return { id: docRef.id, ...profileData };

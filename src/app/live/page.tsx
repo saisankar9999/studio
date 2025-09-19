@@ -13,6 +13,8 @@ import { StealthModeOverlay } from '@/components/common/StealthModeOverlay';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { marked } from 'marked';
+import { getUserProfiles } from '@/lib/firebase/firestore';
+import { useSession } from 'next-auth/react';
 
 
 interface Profile {
@@ -58,6 +60,7 @@ Qualifications
 
 function LivePageContent() {
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const [resume, setResume] = useState('');
   const [jobDescription, setJobDescription] = useState('');
   const [isSessionActive, setIsSessionActive] = useState(false);
@@ -170,11 +173,11 @@ function LivePageContent() {
     setIsClient(true);
     
     const profileId = searchParams.get('profile');
-    if (profileId) {
-      try {
-        const savedProfiles = localStorage.getItem('interviewProfiles');
-        if (savedProfiles) {
-          const profiles: Profile[] = JSON.parse(savedProfiles);
+
+    async function loadProfile() {
+      if (profileId && session?.user?.id) {
+        try {
+          const profiles = await getUserProfiles(session.user.id);
           const profile = profiles.find(p => p.id === profileId);
           if (profile) {
             setResume(profile.resume);
@@ -183,16 +186,24 @@ function LivePageContent() {
               title: `Profile "${profile.name}" Loaded`,
               description: "You're all set for the live interview!",
             });
+          } else {
+             toast({
+              title: 'Profile not found',
+              description: 'Using placeholder data.',
+              variant: 'destructive',
+            });
           }
+        } catch (error) {
+           toast({
+            title: 'Error loading profile',
+            description: 'Could not fetch profiles from the database. Using placeholder data.',
+            variant: 'destructive',
+          });
         }
-      } catch (error) {
-         toast({
-          title: 'Error loading profile',
-          description: 'Using placeholder data.',
-          variant: 'destructive',
-        });
       }
     }
+
+    loadProfile();
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.shiftKey && event.key.toUpperCase() === 'S') {
@@ -219,7 +230,7 @@ function LivePageContent() {
         recognitionRef.current.stop();
       }
     };
-  }, [searchParams, toast]);
+  }, [searchParams, toast, session]);
   
   
   useEffect(() => {
