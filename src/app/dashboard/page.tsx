@@ -4,12 +4,15 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle, BrainCircuit } from 'lucide-react';
-import Image from 'next/image';
+import { ArrowRight, Mic, Video, Trash2, PlusCircle, CheckCircle, BrainCircuit, Loader2 } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
+import { addProfile, deleteProfile, getUserProfiles } from '@/lib/firebase/firestore';
+
 
 interface Profile {
   id: string;
@@ -20,49 +23,67 @@ interface Profile {
 
 export default function DashboardPage() {
   const { toast } = useToast();
+  const router = useRouter();
+  const { data: session, status } = useSession();
+  
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [newProfileName, setNewProfileName] = useState('');
   const [newResume, setNewResume] = useState('');
   const [newJd, setNewJd] = useState('');
-  
-  // Load profiles from local storage on mount
-  useEffect(() => {
-    try {
-      const savedProfiles = localStorage.getItem('interviewProfiles');
-      const savedSelectedId = localStorage.getItem('selectedProfileId');
-      if (savedProfiles) {
-        setProfiles(JSON.parse(savedProfiles));
-      }
-      if (savedSelectedId) {
-        setSelectedProfileId(JSON.parse(savedSelectedId));
-      }
-    } catch (error) {
-      console.error("Failed to load profiles from local storage", error);
-      toast({
-        title: "Error",
-        description: "Could not load your saved profiles.",
-        variant: "destructive"
-      });
-    }
-  }, [toast]);
 
-  // Save profiles to local storage whenever they change
+  // Redirect if not authenticated
   useEffect(() => {
-    try {
-      localStorage.setItem('interviewProfiles', JSON.stringify(profiles));
-      if (selectedProfileId) {
-        localStorage.setItem('selectedProfileId', JSON.stringify(selectedProfileId));
-      } else {
-        localStorage.removeItem('selectedProfileId');
-      }
-    } catch (error) {
-      console.error("Failed to save profiles to local storage", error);
+    if (status === 'unauthenticated') {
+      router.push('/login');
     }
-  }, [profiles, selectedProfileId]);
+  }, [status, router]);
+
+  // Fetch profiles from Firestore on mount
+  useEffect(() => {
+    async function fetchProfiles() {
+      if (session?.user?.id) {
+        setIsLoading(true);
+        try {
+          const userProfiles = await getUserProfiles(session.user.id);
+          setProfiles(userProfiles);
+          
+          const savedSelectedId = localStorage.getItem('selectedProfileId');
+          if (savedSelectedId && userProfiles.some(p => p.id === savedSelectedId)) {
+             setSelectedProfileId(savedSelectedId);
+          } else if (userProfiles.length > 0) {
+             setSelectedProfileId(userProfiles[0].id);
+          }
+
+        } catch (error) {
+          console.error("Failed to load profiles from Firestore", error);
+          toast({
+            title: "Error",
+            description: "Could not load your saved profiles from the database.",
+            variant: "destructive"
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    }
+    if (status === 'authenticated') {
+      fetchProfiles();
+    }
+  }, [session, status, toast]);
+
+  // Save selected profile ID to local storage
+   useEffect(() => {
+    if (selectedProfileId) {
+      localStorage.setItem('selectedProfileId', selectedProfileId);
+    } else {
+      localStorage.removeItem('selectedProfileId');
+    }
+  }, [selectedProfileId]);
   
-  const handleAddProfile = () => {
+  const handleAddProfile = async () => {
     if (!newProfileName || !newResume || !newJd) {
       toast({
         title: "Missing Information",
@@ -79,40 +100,76 @@ export default function DashboardPage() {
       });
       return;
     }
+    if (!session?.user?.id) {
+       toast({
+        title: "Authentication Error",
+        description: "You must be logged in to create a profile.",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    const newProfile: Profile = {
-      id: Date.now().toString(),
-      name: newProfileName,
-      resume: newResume,
-      jobDescription: newJd
-    };
+    try {
+        const newProfileData = {
+            name: newProfileName,
+            resume: newResume,
+            jobDescription: newJd
+        };
+        const newProfile = await addProfile(session.user.id, newProfileData);
 
-    const updatedProfiles = [...profiles, newProfile];
-    setProfiles(updatedProfiles);
-    setSelectedProfileId(newProfile.id);
+        const updatedProfiles = [...profiles, newProfile];
+        setProfiles(updatedProfiles);
+        setSelectedProfileId(newProfile.id);
 
-    // Clear form
-    setNewProfileName('');
-    setNewResume('');
-    setNewJd('');
-    
-    toast({
-      title: "Profile Created!",
-      description: `"${newProfile.name}" has been saved and selected.`,
-    })
+        // Clear form
+        setNewProfileName('');
+        setNewResume('');
+        setNewJd('');
+        
+        toast({
+        title: "Profile Created!",
+        description: `"${newProfile.name}" has been saved and selected.`,
+        });
+    } catch (error) {
+        console.error("Error adding profile:", error);
+        toast({
+            title: "Error",
+            description: "Could not save your profile to the database.",
+            variant: "destructive"
+        });
+    }
   };
 
-  const handleDeleteProfile = (id: string) => {
-    const updatedProfiles = profiles.filter(p => p.id !== id);
-    setProfiles(updatedProfiles);
-    if (selectedProfileId === id) {
-      setSelectedProfileId(null);
+  const handleDeleteProfile = async (id: string) => {
+    if (!session?.user?.id) return;
+    try {
+        await deleteProfile(session.user.id, id);
+        const updatedProfiles = profiles.filter(p => p.id !== id);
+        setProfiles(updatedProfiles);
+        if (selectedProfileId === id) {
+             setSelectedProfileId(updatedProfiles.length > 0 ? updatedProfiles[0].id : null);
+        }
+        toast({
+            title: "Profile Deleted",
+        });
+    } catch (error) {
+         console.error("Error deleting profile:", error);
+        toast({
+            title: "Error",
+            description: "Could not delete the profile.",
+            variant: "destructive"
+        });
     }
-     toast({
-      title: "Profile Deleted",
-    })
   };
   
+  if (status === 'loading' || isLoading) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin" />
+      </div>
+    );
+  }
+
   const selectedProfile = profiles.find(p => p.id === selectedProfileId);
     
   const practiceLink = selectedProfile 
