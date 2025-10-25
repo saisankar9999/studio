@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { Logo } from '@/components/common/Logo';
 
 // Simple SVG for Google icon
 const GoogleIcon = () => (
@@ -82,8 +83,13 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-background">
-      <div className="w-[400px]">
+    <div className="flex h-[calc(100vh-4rem)] items-center justify-center bg-background px-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+            <Logo className="h-12 w-12 text-primary mx-auto" />
+            <h1 className="text-3xl font-bold font-headline mt-4">Welcome to AceTheInterview</h1>
+            <p className="text-muted-foreground">Sign in or create an account to get started.</p>
+        </div>
         <Tabs defaultValue="login" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="login">Login</TabsTrigger>

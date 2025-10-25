@@ -9,7 +9,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -146,22 +146,26 @@ export default function PracticePageContent() {
   };
 
   return (
-    <div className="container mx-auto max-w-5xl p-4 py-8">
-      <h1 className="mb-2 font-headline text-4xl font-bold">
-        Practice Interview
-      </h1>
-      <p className="mb-8 text-muted-foreground">
-        Prepare for your interview by generating questions tailored to your
-        profile.
-      </p>
+    <div className="container mx-auto max-w-6xl p-4 py-12 md:p-8">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">
+          Practice Interview
+        </h1>
+        <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+          Generate questions tailored to your profile, then start a mock interview to practice your answers and get AI feedback.
+        </p>
+      </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-2 items-start">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-2xl">
               <FileText className="h-6 w-6 text-primary" />
               <span>Your Details</span>
             </CardTitle>
+             <CardDescription>
+                Your selected profile is loaded below. You can make temporary adjustments before generating questions.
+             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
@@ -169,7 +173,7 @@ export default function PracticePageContent() {
                <Textarea
                 id="resume-content"
                 placeholder="Paste your resume here..."
-                className="min-h-[150px] resize-y"
+                className="min-h-[200px] resize-y"
                 value={resumeContent}
                 onChange={(e) => setResumeContent(e.target.value)}
               />
@@ -179,36 +183,42 @@ export default function PracticePageContent() {
               <Textarea
                 id="job-description"
                 placeholder="Paste the job description here..."
-                className="min-h-[150px] resize-y"
+                className="min-h-[200px] resize-y"
                 value={jobDescription}
                 onChange={(e) => setJobDescription(e.target.value)}
               />
             </div>
+          </CardContent>
+           <CardFooter>
             <Button
               onClick={handleGenerateClick}
               disabled={isPending}
               className="w-full"
+              size="lg"
             >
               {isPending ? (
                 <LoadingSpinner className="mr-2" />
               ) : (
                 <Sparkles className="mr-2 h-4 w-4" />
               )}
-              Generate Questions
+              Generate Tailored Questions
             </Button>
-          </CardContent>
+           </CardFooter>
         </Card>
 
-        <Card className="flex flex-col">
+        <Card className="flex flex-col lg:sticky lg:top-24">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-2xl">
               <Briefcase className="h-6 w-6 text-accent" />
               <span>Generated Questions</span>
             </CardTitle>
+             <CardDescription>
+                Review the generated questions. When you're ready, start the mock interview.
+             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-1 flex-col">
+          <CardContent className="flex flex-1 flex-col min-h-[400px]">
             {isPending && (
-              <div className="flex flex-1 flex-col items-center justify-center space-y-4">
+              <div className="flex flex-1 flex-col items-center justify-center space-y-4 rounded-lg border-2 border-dashed">
                 <LoadingSpinner className="h-8 w-8 text-primary" />
                 <p className="text-muted-foreground">
                   Our AI is crafting your questions...
@@ -224,14 +234,14 @@ export default function PracticePageContent() {
             )}
             {generatedQuestions && (
               <div className="flex flex-1 flex-col">
-                <ScrollArea className="flex-1">
+                <ScrollArea className="flex-1 pr-4 -mr-4">
                   <Accordion type="single" collapsible className="w-full">
                     {generatedQuestions.map((q, index) => (
                       <AccordionItem value={`item-${index}`} key={index}>
                         <AccordionTrigger>
                           {`Q${index + 1}: ${q.question}`}
                         </AccordionTrigger>
-                        <AccordionContent className="prose prose-sm max-w-none text-muted-foreground">
+                        <AccordionContent className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
                           <strong>Suggested Answer:</strong> {q.suggestedAnswer}
                         </AccordionContent>
                       </AccordionItem>
@@ -240,7 +250,9 @@ export default function PracticePageContent() {
                 </ScrollArea>
                 <Button
                   onClick={startMockInterview}
-                  className="mt-4 w-full bg-accent text-accent-foreground hover:bg-accent/90"
+                  className="mt-4 w-full"
+                  size="lg"
+                  variant="default"
                 >
                   Start Mock Interview
                   <ArrowRight className="ml-2 h-4 w-4" />

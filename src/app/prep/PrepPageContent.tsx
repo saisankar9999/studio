@@ -159,19 +159,26 @@ export default function PrepPageContent() {
   };
 
   return (
-    <div className="container mx-auto max-w-7xl p-4 py-8">
-      <h1 className="mb-2 font-headline text-4xl font-bold">Prep Room</h1>
-      <p className="mb-8 text-muted-foreground">Your personal AI-powered interview mentor.</p>
+    <div className="container mx-auto max-w-7xl p-4 py-12 md:p-8">
+       <div className="text-center mb-12">
+        <h1 className="text-4xl md:text-5xl font-bold font-headline tracking-tight">Prep Room</h1>
+        <p className="mt-4 text-lg text-muted-foreground max-w-3xl mx-auto">
+          Generate a personalized prep plan based on your profile, then chat with an AI mentor to dive deeper into concepts and clear up any doubts.
+        </p>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
         {/* Left Side: Inputs and Prep Plan */}
         <div className="space-y-8">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-2xl">
                 <FileText className="h-6 w-6 text-primary" />
                 <span>Your Details</span>
               </CardTitle>
+               <CardDescription>
+                Your selected profile is loaded below. You can make temporary adjustments before generating a plan.
+             </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
@@ -182,7 +189,7 @@ export default function PrepPageContent() {
                 <Label htmlFor="job-description">Job Description</Label>
                 <Textarea id="job-description" placeholder="Paste the job description here..." className="min-h-[150px]" value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} />
               </div>
-              <Button onClick={handleGeneratePlan} disabled={isGeneratingPlan} className="w-full">
+              <Button onClick={handleGeneratePlan} disabled={isGeneratingPlan || !profileId} className="w-full" size="lg">
                 {isGeneratingPlan ? <LoadingSpinner className="mr-2" /> : <Sparkles className="mr-2" />}
                 Generate Prep Plan
               </Button>
@@ -199,10 +206,11 @@ export default function PrepPageContent() {
           {prepPlan && (
              <Card>
               <CardHeader>
-                <CardTitle>Your Fast-Track Prep Plan</CardTitle>
+                <CardTitle className="text-2xl">Your Fast-Track Prep Plan</CardTitle>
+                 <CardDescription>A step-by-step guide to focus your interview preparation.</CardDescription>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[400px] pr-4">
+                <ScrollArea className="h-[400px] pr-4 -mr-4">
                   <div
                     className="prose prose-sm dark:prose-invert max-w-none"
                     dangerouslySetInnerHTML={{ __html: prepPlan }}
@@ -214,19 +222,20 @@ export default function PrepPageContent() {
         </div>
 
         {/* Right Side: Chat Mentor */}
-        <Card className="sticky top-8">
+        <Card className="sticky top-24">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-2xl">
               <Bot className="h-6 w-6 text-accent" />
               <span>AI Mentor</span>
             </CardTitle>
             <CardDescription>Ask questions, clarify doubts, and practice concepts.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col h-[600px]">
-            <ScrollArea className="flex-1 pr-4" ref={chatContainerRef}>
+            <ScrollArea className="flex-1 pr-4 -mr-4" ref={chatContainerRef}>
               <div className="space-y-4">
                 {conversation.length === 0 && (
-                  <div className="text-center text-muted-foreground p-8">
+                  <div className="text-center text-muted-foreground p-8 flex flex-col items-center justify-center h-full">
+                    <Bot className="h-10 w-10 mb-4 text-muted-foreground" />
                     { profileId ? "Your chat history will appear here. Start by asking a question." : "Please select a profile from the dashboard to start a conversation."}
                   </div>
                 )}
