@@ -10,7 +10,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { configureFirebase } from '@/lib/firebase/firebase-admin';
 
 const GenerateInterviewResponseInputSchema = z.object({
