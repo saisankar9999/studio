@@ -121,9 +121,9 @@ const generateInterviewResponseFlow = ai.defineFlow(
       if (!snapshot.empty) {
         // We add the new user question to the history for the AI prompt
         conversationHistory = [
+            ...snapshot.docs.map(doc => doc.data() as ChatMessage).reverse(),
             { role: 'user', content: question },
-            ...snapshot.docs.map(doc => doc.data() as ChatMessage)
-        ].reverse();
+        ];
       } else {
         conversationHistory = [{ role: 'user', content: question }];
       }
