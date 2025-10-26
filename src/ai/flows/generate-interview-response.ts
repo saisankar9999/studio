@@ -10,7 +10,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { configureFirebase } from '@/lib/firebase/firebase-admin';
 
 const GenerateInterviewResponseInputSchema = z.object({
@@ -119,10 +119,8 @@ const generateInterviewResponseFlow = ai.defineFlow(
     try {
       const snapshot = await conversationRef.orderBy('timestamp', 'desc').limit(4).get();
       if (!snapshot.empty) {
-        // We add the new user question to the history for the AI prompt
-        conversationHistory = [
-            ...snapshot.docs.map(doc => doc.data() as ChatMessage).reverse(),
-        ];
+        // Build the history from oldest to newest for the prompt context
+        conversationHistory = snapshot.docs.map(doc => doc.data() as ChatMessage).reverse();
       }
     } catch (error) {
       console.error("Error fetching conversation history from Firestore:", error);
