@@ -49,7 +49,6 @@ const prompt = ai.definePrompt({
       resume: z.string(),
       jobDescription: z.string(),
       question: z.string(),
-      // Make conversationHistory optional in the prompt itself
       conversationHistory: z.array(ChatMessageSchema).optional(),
     })
   },
@@ -79,8 +78,7 @@ Job Description:
 CONVERSATION HISTORY:
 ---
 {{#each conversationHistory}}
-{{#if (eq this.role 'user')}}User: {{this.content}}{{/if}}
-{{#if (eq this.role 'model')}}AI: {{this.content}}{{/if}}
+{{this.role}}: {{this.content}}
 {{/each}}
 ---
 {{/if}}
@@ -119,8 +117,10 @@ const generateInterviewResponseFlow = ai.defineFlow(
     try {
       const snapshot = await conversationRef.orderBy('timestamp', 'desc').limit(4).get();
       if (!snapshot.empty) {
-        // Build the history from oldest to newest for the prompt context
-        conversationHistory = snapshot.docs.map(doc => doc.data() as ChatMessage).reverse();
+        conversationHistory = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return { role: data.role, content: data.content };
+        }).reverse(); // Reverse to be in chronological order
       }
     } catch (error) {
       console.error("Error fetching conversation history from Firestore:", error);
