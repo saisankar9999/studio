@@ -122,15 +122,11 @@ const generateInterviewResponseFlow = ai.defineFlow(
         // We add the new user question to the history for the AI prompt
         conversationHistory = [
             ...snapshot.docs.map(doc => doc.data() as ChatMessage).reverse(),
-            { role: 'user', content: question },
         ];
-      } else {
-        conversationHistory = [{ role: 'user', content: question }];
       }
     } catch (error) {
       console.error("Error fetching conversation history from Firestore:", error);
       // Proceed with just the current question if history fails
-      conversationHistory = [{ role: 'user', content: question }];
     }
 
     // 3. Generate the AI response
