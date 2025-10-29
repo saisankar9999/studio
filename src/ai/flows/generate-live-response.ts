@@ -71,8 +71,8 @@ Job Description:
 CONVERSATION HISTORY (for context on follow-up questions):
 ---
 {{#each conversationHistory}}
-{{#if (eq this.role 'user')}}Interviewer: {{this.content}}{{/if}}
-{{#if (eq this.role 'model')}}Me (My Answer): {{this.content}}{{/if}}
+{{#if (this.role === 'user')}}Interviewer: {{this.content}}{{/if}}
+{{#if (this.role === 'model')}}Me (My Answer): {{this.content}}{{/if}}
 {{/each}}
 ---
 {{/if}}
