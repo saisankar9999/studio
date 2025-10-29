@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot, User, Loader2, Power, PowerOff, AudioLines, Monitor, MonitorOff, AlertCircle } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { generateLiveResponse } from '@/ai/flows/generate-live-response';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { StealthModeOverlay } from '@/components/common/StealthModeOverlay';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -63,25 +62,33 @@ function LivePageContent() {
 
   const handleGenerateResponse = useCallback(async (question: string) => {
     if (!question) return;
-
-    // Add user question to history immediately for a responsive UI
-    const currentHistory: ChatMessage[] = [...conversationHistory, { role: 'user', content: question }];
-    setConversationHistory(currentHistory);
+  
+    const userMessage = { role: 'user' as const, content: question };
+    setConversationHistory(prev => [...prev, userMessage]);
     setIsGenerating(true);
-
+  
     try {
-      // Pass the most up-to-date history to the AI
-      const { answer } = await generateLiveResponse({
-        question,
-        resume,
-        jobDescription,
-        conversationHistory: currentHistory, 
+      const response = await fetch('/api/generate-answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question,
+          resume,
+          jobDescription,
+          conversationHistory,
+        }),
       });
-
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
+  
+      const { answer } = await response.json();
       const finalHtmlAnswer = await marked(answer);
-      // Replace the user's message with the final history including the model's response
+      
       setConversationHistory(prev => [...prev, { role: 'model', content: finalHtmlAnswer }]);
-
+  
     } catch (error) {
       console.error("Error generating AI response:", error);
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -90,27 +97,28 @@ function LivePageContent() {
         title: "AI Error",
         description: `Failed to generate response: ${errorMessage}`,
       });
-      // The user's question remains in the history even if the AI fails
     } finally {
       setIsGenerating(false);
     }
   }, [resume, jobDescription, toast, conversationHistory]);
   
   const startRecording = useCallback(() => {
-    if (!recognitionRef.current) {
+    if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+        toast({ 
+            title: 'Speech Recognition Not Supported', 
+            description: 'Please use a browser that supports the Web Speech API, like Chrome.', 
+            variant: 'destructive' 
+        });
         return;
     }
     
-    if (isRecording) {
-        // Already recording, so just ensure it's running
-        try {
-            recognitionRef.current.start();
-        } catch (e) {
-             // This error is expected if it's already running.
-        }
-        return;
+    if (!recognitionRef.current) {
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = true;
+        recognitionRef.current.interimResults = true;
     }
-
+    
     const recognition = recognitionRef.current;
     
     recognition.onresult = (event: any) => {
@@ -133,7 +141,6 @@ function LivePageContent() {
     };
 
     recognition.onerror = (event: any) => {
-      // Ignore common non-errors
       if (event.error === 'aborted' || event.error === 'no-speech' || event.error === 'network') {
         return;
       }
@@ -141,39 +148,44 @@ function LivePageContent() {
       toast({
         variant: "destructive",
         title: "Speech Recognition Error",
-        description: `Error: ${event.error}.`,
+        description: `Error: ${event.error}. The service might restart.`,
       });
-      setIsRecording(false);
+      setIsRecording(false); // Can be restarted by onend
     };
     
     recognition.onend = () => {
-      // This is the key part: if the session is still active,
-      // unconditionally restart recognition. This handles cases where
-      // the browser stops it after a period of silence.
       if (isSessionActive) {
-          startRecording();
+          // Unconditionally restart recognition if the session is supposed to be active.
+          try {
+            recognition.start();
+          } catch(e) {
+              // This can happen if it was manually stopped.
+              setIsRecording(false);
+          }
       } else {
         setIsRecording(false);
       }
     };
 
-    try {
-      recognition.start();
-      setIsRecording(true);
-    } catch(e) {
-      console.error("Could not start recognition:", e);
-      setIsRecording(false);
+    if (!isRecording) {
+      try {
+        recognition.start();
+        setIsRecording(true);
+      } catch(e) {
+        console.error("Could not start recognition:", e);
+        setIsRecording(false); // Ensure state is correct on failure
+      }
     }
   }, [handleGenerateResponse, toast, isRecording, isSessionActive]);
 
 
   const stopRecording = useCallback(() => {
-    if (recognitionRef.current) {
+    if (recognitionRef.current && isRecording) {
         recognitionRef.current.stop();
         setIsRecording(false);
         setLiveTranscript('');
     }
-  }, []);
+  }, [isRecording]);
 
   useEffect(() => {
     setIsClient(true);
@@ -228,26 +240,10 @@ function LivePageContent() {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    // Check for SpeechRecognition API
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true; // Keep listening even after a pause
-        recognition.interimResults = true;
-        recognitionRef.current = recognition;
-    } else {
-        toast({ 
-            title: 'Speech Recognition Not Supported', 
-            description: 'Please use a browser that supports the Web Speech API, like Chrome.', 
-            variant: 'destructive' 
-        });
-    }
-
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       if (recognitionRef.current) {
-        recognitionRef.current.onend = null; // Prevent restart on component unmount
+        recognitionRef.current.onend = null;
         recognitionRef.current.stop();
       }
     };
@@ -260,12 +256,6 @@ function LivePageContent() {
     } else {
       stopRecording();
     }
-    // Make sure to clean up when the component unmounts or isSessionActive changes
-    return () => {
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
-        }
-    }
   }, [isSessionActive, startRecording, stopRecording]);
 
   const handleToggleSession = () => {
@@ -273,11 +263,10 @@ function LivePageContent() {
          toast({ title: 'No Profile Loaded', description: 'Cannot start session without a job profile.', variant: 'destructive' });
          return;
     }
+    setIsSessionActive(prev => !prev);
     if (isSessionActive) {
-      setIsSessionActive(false);
-    } else {
+      // If we are stopping the session
       setConversationHistory([]);
-      setIsSessionActive(true);
     }
   };
 
