@@ -71,8 +71,11 @@ Job Description:
 CONVERSATION HISTORY (for context on follow-up questions):
 ---
 {{#each conversationHistory}}
-{{#if (this.role === 'user')}}Interviewer: {{this.content}}{{/if}}
-{{#if (this.role === 'model')}}Me (My Answer): {{this.content}}{{/if}}
+{{#if (eq this.role "user")}}
+Interviewer: {{this.content}}
+{{else}}
+Me (My Answer): {{this.content}}
+{{/if}}
 {{/each}}
 ---
 {{/if}}
@@ -99,3 +102,10 @@ const generateLiveResponseFlow = ai.defineFlow(
     return { answer: output.answer };
   }
 );
+
+// A simple Handlebars helper for equality checks
+function eq(arg1: any, arg2: any, options: any) {
+  return arg1 === arg2 ? options.fn(this) : options.inverse(this);
+}
+
+ai.registry.registerHelper('eq', eq);
