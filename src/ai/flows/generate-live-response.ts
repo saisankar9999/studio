@@ -80,12 +80,6 @@ Most Recent Interviewer's Question:
 Your Suggested Answer (as the candidate, ~60 words):`,
 });
 
-// A simple Handlebars helper for equality checks that Genkit can register.
-ai.registry.registerHelper('eq', (arg1: any, arg2: any, options: any) => {
-    return arg1 === arg2 ? options.fn(this) : options.inverse(this);
-});
-
-
 const generateLiveResponseFlow = ai.defineFlow(
   {
     name: 'generateLiveResponseFlow',
