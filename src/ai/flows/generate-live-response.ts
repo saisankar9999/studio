@@ -42,7 +42,15 @@ export async function generateLiveResponse(
 const prompt = ai.definePrompt({
   name: 'generateLiveResponsePrompt',
   input: {
-    schema: GenerateLiveResponseInputSchema
+    schema: z.object({
+        question: z.string(),
+        resume: z.string(),
+        jobDescription: z.string(),
+        conversationHistory: z.array(ChatMessageSchema.extend({
+            isUser: z.boolean(),
+            isModel: z.boolean(),
+        })).optional(),
+    }),
   },
   output: { schema: GenerateLiveResponseOutputSchema },
   prompt: `You are an expert career coach and industry researcher providing a suggested answer for a candidate in a live interview.
@@ -65,9 +73,10 @@ Job Description:
 CONVERSATION HISTORY (for context on follow-up questions):
 ---
 {{#each conversationHistory}}
-{{#if (this.role === "user")}}
+{{#if this.isUser}}
 Interviewer: {{this.content}}
-{{else}}
+{{/if}}
+{{#if this.isModel}}
 Me (My Answer): {{this.content}}
 {{/if}}
 {{/each}}
@@ -86,9 +95,18 @@ const generateLiveResponseFlow = ai.defineFlow(
     inputSchema: GenerateLiveResponseInputSchema,
     outputSchema: GenerateLiveResponseOutputSchema,
   },
-  async (input) => {
-    // The flow receives the clean input, which matches the schema.
-    const { output } = await prompt(input);
+  async ({ conversationHistory, ...rest }) => {
+    // Pre-process history to add boolean flags for Handlebars
+    const processedHistory = conversationHistory?.map(message => ({
+      ...message,
+      isUser: message.role === 'user',
+      isModel: message.role === 'model',
+    }));
+
+    const { output } = await prompt({
+      ...rest,
+      conversationHistory: processedHistory,
+    });
 
     if (!output) {
       throw new Error('Failed to generate an answer from the AI model.');
