@@ -84,7 +84,12 @@ function LivePageContent() {
 
     } catch (error) {
       console.error("Error generating AI response:", error);
-      toast({ variant: "destructive", title: "AI Error", description: "Failed to generate a response." });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      toast({
+        variant: "destructive",
+        title: "AI Error",
+        description: `Failed to generate response: ${errorMessage}`,
+      });
       // The user's question remains in the history even if the AI fails
     } finally {
       setIsGenerating(false);
