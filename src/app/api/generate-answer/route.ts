@@ -1,11 +1,18 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { generateLiveResponse } from '@/ai/flows/generate-live-response';
+
+const ChatMessageSchema = z.object({
+  role: z.enum(['user', 'model']),
+  content: z.string(),
+});
 
 const generateAnswerRequest = z.object({
   question: z.string(),
   resume: z.string(),
   jobDescription: z.string(),
+  conversationHistory: z.array(ChatMessageSchema).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -15,12 +22,13 @@ export async function POST(request: NextRequest) {
     if (!validation.success) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
-    const { question, resume, jobDescription } = validation.data;
+    const { question, resume, jobDescription, conversationHistory } = validation.data;
 
     const { answer } = await generateLiveResponse({
       question,
       resume,
       jobDescription,
+      conversationHistory,
     });
 
     return NextResponse.json({ answer });

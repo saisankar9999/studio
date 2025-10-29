@@ -42,13 +42,7 @@ export async function generateLiveResponse(
 const prompt = ai.definePrompt({
   name: 'generateLiveResponsePrompt',
   input: {
-    schema: z.object({
-      question: z.string(),
-      resume: z.string(),
-      jobDescription: z.string(),
-      // The prompt input accepts the raw history
-      conversationHistory: z.array(ChatMessageSchema).optional(),
-    })
+    schema: GenerateLiveResponseInputSchema
   },
   output: { schema: GenerateLiveResponseOutputSchema },
   prompt: `You are an expert career coach and industry researcher providing a suggested answer for a candidate in a live interview.
@@ -86,6 +80,12 @@ Most Recent Interviewer's Question:
 Your Suggested Answer (as the candidate, ~60 words):`,
 });
 
+// A simple Handlebars helper for equality checks that Genkit can register.
+ai.registry.registerHelper('eq', (arg1: any, arg2: any, options: any) => {
+    return arg1 === arg2 ? options.fn(this) : options.inverse(this);
+});
+
+
 const generateLiveResponseFlow = ai.defineFlow(
   {
     name: 'generateLiveResponseFlow',
@@ -102,10 +102,3 @@ const generateLiveResponseFlow = ai.defineFlow(
     return { answer: output.answer };
   }
 );
-
-// A simple Handlebars helper for equality checks
-function eq(arg1: any, arg2: any, options: any) {
-  return arg1 === arg2 ? options.fn(this) : options.inverse(this);
-}
-
-ai.registry.registerHelper('eq', eq);
