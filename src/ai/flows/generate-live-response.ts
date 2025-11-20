@@ -53,13 +53,19 @@ const generateLiveResponseFlow = ai.defineFlow(
     const questionType = classifyQuestion(question, jobDescription);
     const systemPrompt = pickPrompt(questionType);
 
-    // 2. Call the LLM with the dynamic system prompt and context.
+    // 2. Construct the message array
+    const messages = [
+        { role: 'system' as const, content: systemPrompt },
+        ...(conversationHistory || []),
+        {
+            role: 'user' as const,
+            content: `Interview Question: ${question}\nResume Context: ${resume}\nJD Context: ${jobDescription}`,
+        },
+    ];
+
+    // 3. Call the LLM with the manually constructed messages array
     const { output } = await ai.generate({
-      prompt: `Interview Question: ${question}\nResume Context: ${resume}\nJD Context: ${jobDescription}`,
-      history: conversationHistory,
-      config: {
-        systemPrompt,
-      },
+      messages: messages,
       output: {
         schema: GenerateLiveResponseOutputSchema,
       },
