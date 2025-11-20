@@ -51,38 +51,18 @@ const generateLiveResponseFlow = ai.defineFlow(
   async ({ question, jobDescription, conversationHistory, resume }) => {
     // 1. Classify the question to pick the right prompt.
     const questionType = classifyQuestion(question, jobDescription);
-    const promptTemplate = pickPrompt(questionType);
+    const systemPrompt = pickPrompt(questionType);
 
-    // 2. Pre-process history to add boolean flags for Handlebars
-    const processedHistory = conversationHistory?.map(message => ({
-      ...message,
-      isUser: message.role === 'user',
-      isModel: message.role === 'model',
-    }));
-    
-    // 3. Define and run the dynamic prompt
-    const dynamicPrompt = ai.definePrompt({
-        name: 'dynamicLiveResponsePrompt',
-        prompt: promptTemplate,
-        input: {
-            schema: z.object({
-                question: z.string(),
-                resume: z.string(),
-                jobDescription: z.string(),
-                conversationHistory: z.array(ChatMessageSchema.extend({
-                    isUser: z.boolean(),
-                    isModel: z.boolean(),
-                })).optional(),
-            }),
-        },
-        output: { schema: GenerateLiveResponseOutputSchema },
-    });
-
-    const { output } = await dynamicPrompt({
-      question,
-      resume,
-      jobDescription,
-      conversationHistory: processedHistory,
+    // 2. Call the LLM with the dynamic system prompt and context.
+    const { output } = await ai.generate({
+      prompt: `Interview Question: ${question}\nResume Context: ${resume}\nJD Context: ${jobDescription}`,
+      history: conversationHistory,
+      config: {
+        systemPrompt,
+      },
+      output: {
+        schema: GenerateLiveResponseOutputSchema,
+      },
     });
 
     if (!output) {
